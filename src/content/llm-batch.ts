@@ -7,8 +7,7 @@ import {
   type TierLetter,
 } from "../shared/messages";
 import {
-  clampBatchMax,
-  DEFAULT_SETTINGS,
+  hydrateSettings,
   SETTINGS_STORAGE_KEY,
   type FeedFocusSettings,
 } from "../shared/settings";
@@ -65,16 +64,7 @@ export function resetLlmQueue(): void {
 
 export async function loadSettingsSnapshot(): Promise<FeedFocusSettings> {
   const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
-  const s = raw[SETTINGS_STORAGE_KEY] as Partial<FeedFocusSettings> | undefined;
-  return {
-    modelId:
-      typeof s?.modelId === "string" ? s.modelId : DEFAULT_SETTINGS.modelId,
-    batchMax: clampBatchMax(s?.batchMax ?? DEFAULT_SETTINGS.batchMax),
-    verboseLogging:
-      typeof s?.verboseLogging === "boolean"
-        ? s.verboseLogging
-        : DEFAULT_SETTINGS.verboseLogging,
-  };
+  return hydrateSettings(raw[SETTINGS_STORAGE_KEY] as Partial<FeedFocusSettings> | undefined);
 }
 
 function sendClassifyBatchStreaming(

@@ -53,3 +53,27 @@ export const MODEL_PRESETS: { id: string; label: string }[] = [
   { id: "qwen3.5-flash", label: "Qwen Flash (Aliyun DashScope)" },
   { id: "doubao-seed-2-0-mini-260215", label: "Doubao Seed 2.0 Mini (Volcengine Ark)" },
 ];
+
+/** Old model IDs → new canonical IDs (survives across preset renames). */
+const MODEL_ID_MIGRATIONS: Record<string, string> = {
+  "qwen-plus": "qwen3.6-plus",
+  "qwen-flash": "qwen3.5-flash",
+};
+
+export function migrateModelId(id: string): string {
+  return MODEL_ID_MIGRATIONS[id] ?? id;
+}
+
+/** Hydrate raw storage data into a fully-typed FeedFocusSettings, applying any model ID migrations. */
+export function hydrateSettings(raw: Partial<FeedFocusSettings> | undefined): FeedFocusSettings {
+  return {
+    modelId: migrateModelId(
+      typeof raw?.modelId === "string" ? raw.modelId : DEFAULT_SETTINGS.modelId
+    ),
+    batchMax: clampBatchMax(raw?.batchMax ?? DEFAULT_SETTINGS.batchMax),
+    verboseLogging:
+      typeof raw?.verboseLogging === "boolean"
+        ? raw.verboseLogging
+        : DEFAULT_SETTINGS.verboseLogging,
+  };
+}

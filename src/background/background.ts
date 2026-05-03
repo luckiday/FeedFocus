@@ -17,13 +17,27 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== PORT_CLASSIFY_STREAM) return;
 
+  let portAlive = true;
+  port.onDisconnect.addListener(() => {
+    portAlive = false;
+  });
+
+  function safePost(msg: ClassifyStreamPortServerMsg): void {
+    if (!portAlive) return;
+    try {
+      port.postMessage(msg);
+    } catch {
+      portAlive = false;
+    }
+  }
+
   port.onMessage.addListener((raw: unknown) => {
     void (async () => {
       const msg = raw as ClassifyStreamPortClientMsg;
       try {
         const items = msg?.items;
         if (!Array.isArray(items) || items.length === 0) {
-          port.postMessage({
+          safePost({
             type: "final",
             response: { ok: false, error: "empty_batch" },
           } satisfies ClassifyStreamPortServerMsg);
@@ -33,16 +47,16 @@ chrome.runtime.onConnect.addListener((port) => {
         const modelId = settings.modelId?.trim() || DEFAULT_SETTINGS.modelId;
 
         const res = await classifyBatchArkStream(settings, items, (partial) => {
-          port.postMessage({
+          safePost({
             type: "partial",
             results: partial,
             modelId,
           } satisfies ClassifyStreamPortServerMsg);
         });
-        port.postMessage({ type: "final", response: res } satisfies ClassifyStreamPortServerMsg);
+        safePost({ type: "final", response: res } satisfies ClassifyStreamPortServerMsg);
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : "classify_stream_failed";
-        port.postMessage({
+        safePost({
           type: "final",
           response: { ok: false, error: errMsg },
         } satisfies ClassifyStreamPortServerMsg);

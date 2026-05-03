@@ -69,6 +69,22 @@
     batchMax: DEFAULT_BATCH_MAX,
     verboseLogging: false
   };
+  var MODEL_ID_MIGRATIONS = {
+    "qwen-plus": "qwen3.6-plus",
+    "qwen-flash": "qwen3.5-flash"
+  };
+  function migrateModelId(id) {
+    return MODEL_ID_MIGRATIONS[id] ?? id;
+  }
+  function hydrateSettings(raw) {
+    return {
+      modelId: migrateModelId(
+        typeof raw?.modelId === "string" ? raw.modelId : DEFAULT_SETTINGS.modelId
+      ),
+      batchMax: clampBatchMax(raw?.batchMax ?? DEFAULT_SETTINGS.batchMax),
+      verboseLogging: typeof raw?.verboseLogging === "boolean" ? raw.verboseLogging : DEFAULT_SETTINGS.verboseLogging
+    };
+  }
 
   // src/content/classification-log.ts
   var verboseLogging = DEFAULT_SETTINGS.verboseLogging;
@@ -403,12 +419,7 @@
   }
   async function loadSettingsSnapshot() {
     const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
-    const s = raw[SETTINGS_STORAGE_KEY];
-    return {
-      modelId: typeof s?.modelId === "string" ? s.modelId : DEFAULT_SETTINGS.modelId,
-      batchMax: clampBatchMax(s?.batchMax ?? DEFAULT_SETTINGS.batchMax),
-      verboseLogging: typeof s?.verboseLogging === "boolean" ? s.verboseLogging : DEFAULT_SETTINGS.verboseLogging
-    };
+    return hydrateSettings(raw[SETTINGS_STORAGE_KEY]);
   }
   function sendClassifyBatchStreaming(items, onPartial) {
     return new Promise((resolve) => {

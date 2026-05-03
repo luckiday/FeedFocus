@@ -1,6 +1,6 @@
 import {
-  clampBatchMax,
   DEFAULT_SETTINGS,
+  hydrateSettings,
   resolveProviderForModel,
   SETTINGS_STORAGE_KEY,
   trimApiBaseUrl,
@@ -411,14 +411,5 @@ export async function classifyBatchArk(
 
 export async function loadSettings(): Promise<FeedFocusSettings> {
   const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
-  const s = raw[SETTINGS_STORAGE_KEY] as Partial<FeedFocusSettings> | undefined;
-  return {
-    modelId:
-      typeof s?.modelId === "string" ? s.modelId : DEFAULT_SETTINGS.modelId,
-    batchMax: clampBatchMax(s?.batchMax ?? DEFAULT_SETTINGS.batchMax),
-    verboseLogging:
-      typeof s?.verboseLogging === "boolean"
-        ? s.verboseLogging
-        : DEFAULT_SETTINGS.verboseLogging,
-  };
+  return hydrateSettings(raw[SETTINGS_STORAGE_KEY] as Partial<FeedFocusSettings> | undefined);
 }

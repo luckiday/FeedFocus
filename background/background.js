@@ -32,6 +32,22 @@
     batchMax: DEFAULT_BATCH_MAX,
     verboseLogging: false
   };
+  var MODEL_ID_MIGRATIONS = {
+    "qwen-plus": "qwen3.6-plus",
+    "qwen-flash": "qwen3.5-flash"
+  };
+  function migrateModelId(id) {
+    return MODEL_ID_MIGRATIONS[id] ?? id;
+  }
+  function hydrateSettings(raw) {
+    return {
+      modelId: migrateModelId(
+        typeof raw?.modelId === "string" ? raw.modelId : DEFAULT_SETTINGS.modelId
+      ),
+      batchMax: clampBatchMax(raw?.batchMax ?? DEFAULT_SETTINGS.batchMax),
+      verboseLogging: typeof raw?.verboseLogging === "boolean" ? raw.verboseLogging : DEFAULT_SETTINGS.verboseLogging
+    };
+  }
 
   // src/background/env-bootstrap.ts
   function parseEnvText(text) {
@@ -62,30 +78,22 @@
     }
     return patch;
   }
-  function hydrate(cur) {
-    return {
-      modelId: typeof cur?.modelId === "string" ? cur.modelId : DEFAULT_SETTINGS.modelId,
-      batchMax: clampBatchMax(cur?.batchMax ?? DEFAULT_SETTINGS.batchMax),
-      verboseLogging: typeof cur?.verboseLogging === "boolean" ? cur.verboseLogging : DEFAULT_SETTINGS.verboseLogging
-    };
-  }
   async function bootstrapSettingsFromBundledEnv(reason) {
-    let text;
+    const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
+    const cur = raw[SETTINGS_STORAGE_KEY];
+    const merged = hydrateSettings(cur);
+    const needsMigration = typeof cur?.modelId === "string" && cur.modelId !== merged.modelId;
+    let patch = {};
     try {
       const url = chrome.runtime.getURL(".env");
       const res = await fetch(url);
-      if (!res.ok) return;
-      text = await res.text();
+      if (res.ok) {
+        patch = envToSettingsPatch(parseEnvText(await res.text()));
+      }
     } catch {
-      return;
     }
-    const patch = envToSettingsPatch(parseEnvText(text));
-    if (patch.modelId === void 0 && patch.batchMax === void 0 && patch.verboseLogging === void 0) {
-      return;
-    }
-    const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
-    const cur = raw[SETTINGS_STORAGE_KEY];
-    const merged = hydrate(cur);
+    const hasPatch = patch.modelId !== void 0 || patch.batchMax !== void 0 || patch.verboseLogging !== void 0;
+    if (!needsMigration && !hasPatch) return;
     const overwrite = reason === chrome.runtime.OnInstalledReason.INSTALL;
     if (patch.modelId !== void 0 && (overwrite || !merged.modelId))
       merged.modelId = patch.modelId;
@@ -447,12 +455,7 @@ Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructio
   }
   async function loadSettings() {
     const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
-    const s = raw[SETTINGS_STORAGE_KEY];
-    return {
-      modelId: typeof s?.modelId === "string" ? s.modelId : DEFAULT_SETTINGS.modelId,
-      batchMax: clampBatchMax(s?.batchMax ?? DEFAULT_SETTINGS.batchMax),
-      verboseLogging: typeof s?.verboseLogging === "boolean" ? s.verboseLogging : DEFAULT_SETTINGS.verboseLogging
-    };
+    return hydrateSettings(raw[SETTINGS_STORAGE_KEY]);
   }
 
   // src/background/background.ts
@@ -461,13 +464,25 @@ Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructio
   });
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== PORT_CLASSIFY_STREAM) return;
+    let portAlive = true;
+    port.onDisconnect.addListener(() => {
+      portAlive = false;
+    });
+    function safePost(msg) {
+      if (!portAlive) return;
+      try {
+        port.postMessage(msg);
+      } catch {
+        portAlive = false;
+      }
+    }
     port.onMessage.addListener((raw) => {
       void (async () => {
         const msg = raw;
         try {
           const items = msg?.items;
           if (!Array.isArray(items) || items.length === 0) {
-            port.postMessage({
+            safePost({
               type: "final",
               response: { ok: false, error: "empty_batch" }
             });
@@ -476,16 +491,16 @@ Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructio
           const settings = await loadSettings();
           const modelId = settings.modelId?.trim() || DEFAULT_SETTINGS.modelId;
           const res = await classifyBatchArkStream(settings, items, (partial) => {
-            port.postMessage({
+            safePost({
               type: "partial",
               results: partial,
               modelId
             });
           });
-          port.postMessage({ type: "final", response: res });
+          safePost({ type: "final", response: res });
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : "classify_stream_failed";
-          port.postMessage({
+          safePost({
             type: "final",
             response: { ok: false, error: errMsg }
           });

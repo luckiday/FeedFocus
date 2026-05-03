@@ -21,6 +21,22 @@
     { id: "qwen3.5-flash", label: "Qwen Flash (Aliyun DashScope)" },
     { id: "doubao-seed-2-0-mini-260215", label: "Doubao Seed 2.0 Mini (Volcengine Ark)" }
   ];
+  var MODEL_ID_MIGRATIONS = {
+    "qwen-plus": "qwen3.6-plus",
+    "qwen-flash": "qwen3.5-flash"
+  };
+  function migrateModelId(id) {
+    return MODEL_ID_MIGRATIONS[id] ?? id;
+  }
+  function hydrateSettings(raw) {
+    return {
+      modelId: migrateModelId(
+        typeof raw?.modelId === "string" ? raw.modelId : DEFAULT_SETTINGS.modelId
+      ),
+      batchMax: clampBatchMax(raw?.batchMax ?? DEFAULT_SETTINGS.batchMax),
+      verboseLogging: typeof raw?.verboseLogging === "boolean" ? raw.verboseLogging : DEFAULT_SETTINGS.verboseLogging
+    };
+  }
 
   // src/popup/popup.ts
   function $(id) {
@@ -30,12 +46,7 @@
   }
   async function loadSettings() {
     const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
-    const s = raw[SETTINGS_STORAGE_KEY];
-    return {
-      modelId: typeof s?.modelId === "string" ? s.modelId : DEFAULT_SETTINGS.modelId,
-      batchMax: clampBatchMax(s?.batchMax ?? DEFAULT_SETTINGS.batchMax),
-      verboseLogging: typeof s?.verboseLogging === "boolean" ? s.verboseLogging : DEFAULT_SETTINGS.verboseLogging
-    };
+    return hydrateSettings(raw[SETTINGS_STORAGE_KEY]);
   }
   async function saveSettings(s) {
     await chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: s });

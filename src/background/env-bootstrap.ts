@@ -1,6 +1,7 @@
 import {
   clampBatchMax,
   DEFAULT_SETTINGS,
+  hydrateSettings,
   SETTINGS_STORAGE_KEY,
   type FeedFocusSettings,
 } from "../shared/settings";
@@ -46,43 +47,37 @@ function envToSettingsPatch(env: ParsedEnv): SettingsPatch {
   return patch;
 }
 
-function hydrate(cur: Partial<FeedFocusSettings> | undefined): FeedFocusSettings {
-  return {
-    modelId:
-      typeof cur?.modelId === "string" ? cur.modelId : DEFAULT_SETTINGS.modelId,
-    batchMax: clampBatchMax(cur?.batchMax ?? DEFAULT_SETTINGS.batchMax),
-    verboseLogging:
-      typeof cur?.verboseLogging === "boolean"
-        ? cur.verboseLogging
-        : DEFAULT_SETTINGS.verboseLogging,
-  };
-}
-
 export async function bootstrapSettingsFromBundledEnv(
   reason: chrome.runtime.OnInstalledReason
 ): Promise<void> {
-  let text: string;
+  const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
+  const cur = raw[SETTINGS_STORAGE_KEY] as Partial<FeedFocusSettings> | undefined;
+  const merged = hydrateSettings(cur); // applies model ID migration
+
+  // Detect whether migration changed the stored model ID
+  const needsMigration =
+    typeof cur?.modelId === "string" && cur.modelId !== merged.modelId;
+
+  // Try to load .env patch
+  let patch: SettingsPatch = {};
   try {
     const url = chrome.runtime.getURL(".env");
     const res = await fetch(url);
-    if (!res.ok) return;
-    text = await res.text();
+    if (res.ok) {
+      patch = envToSettingsPatch(parseEnvText(await res.text()));
+    }
   } catch {
-    return;
+    /* .env absent or unreadable — fine */
   }
 
-  const patch = envToSettingsPatch(parseEnvText(text));
-  if (
-    patch.modelId === undefined &&
-    patch.batchMax === undefined &&
-    patch.verboseLogging === undefined
-  ) {
-    return;
-  }
+  const hasPatch =
+    patch.modelId !== undefined ||
+    patch.batchMax !== undefined ||
+    patch.verboseLogging !== undefined;
 
-  const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
-  const cur = raw[SETTINGS_STORAGE_KEY] as Partial<FeedFocusSettings> | undefined;
-  const merged = hydrate(cur);
+  // Nothing to do if no migration needed and no .env patch to apply
+  if (!needsMigration && !hasPatch) return;
+
   const overwrite = reason === chrome.runtime.OnInstalledReason.INSTALL;
 
   if (patch.modelId !== undefined && (overwrite || !merged.modelId))
