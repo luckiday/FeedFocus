@@ -49,7 +49,7 @@ export const DEFAULT_SETTINGS: FeedFocusSettings = {
 
 export const MODEL_PRESETS: { id: string; label: string }[] = [
   { id: "qwen-turbo", label: "Qwen Turbo (Aliyun DashScope)" },
-  { id: "qwen-plus", label: "Qwen Plus (Aliyun DashScope)" },
-  { id: "qwen-flash", label: "Qwen Flash (Aliyun DashScope)" },
+  { id: "qwen3.6-plus", label: "Qwen Plus (Aliyun DashScope)" },
+  { id: "qwen3.5-flash", label: "Qwen Flash (Aliyun DashScope)" },
   { id: "doubao-seed-2-0-mini-260215", label: "Doubao Seed 2.0 Mini (Volcengine Ark)" },
 ];
