@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Feed Focus for YouTube",
+  "version": "1.0.0",
+  "description": "Attention cues on YouTube home: green/yellow/red tile markers (your LLM keys at build time) plus offline gray hints—not medical advice.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://ark.cn-beijing.volces.com/*",
+    "https://dashscope.aliyuncs.com/*"
+  ],
+  "action": {
+    "default_title": "Feed Focus for YouTube",
+    "default_popup": "popup/popup.html"
+  },
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content/youtube-home.js"],
+      "css": ["content/youtube-home.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "feed-focus-for-youtube",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Feed Focus for YouTube — Chrome MV3 extension",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "build:public": "PUBLIC_BUILD=1 node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && npm run build"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  }
+}

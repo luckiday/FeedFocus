@@ -1,0 +1,54 @@
+/* Tile marker: bottom-right of full card (thumbnail + metadata), not thumbnail-only */
+
+.ff-focus-marker {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  z-index: 12;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.ff-focus-marker--G {
+  background: #7d8f7c;
+}
+
+.ff-focus-marker--Y {
+  background: #b89a4e;
+}
+
+.ff-focus-marker--R {
+  background: #8f4d45;
+}
+
+/* Rules only; G/Y/R fill is reserved for model output */
+.ff-focus-marker--heuristic {
+  background: #9a9a9a;
+}
+
+/* Hollow / neutral: placeholder until LLM returns (when API key is set) */
+.ff-focus-marker--pending {
+  background: transparent !important;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(80, 80, 80, 0.4),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .ff-focus-marker--heuristic {
+    background: #6b6b6b;
+  }
+
+  .ff-focus-marker {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  }
+
+  .ff-focus-marker--pending {
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 255, 255, 0.22),
+      0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+}

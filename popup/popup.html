@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Feed Focus for YouTube</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="shell__header">
+        <h1 class="shell__title">Feed Focus</h1>
+        <p class="shell__tagline">Attention cues · YouTube home feed</p>
+      </header>
+
+      <form id="settings-form" class="form">
+        <label class="field">
+          <span class="field__label">Model</span>
+          <select id="model-id" class="field__input field__input--select" name="modelId"></select>
+        </label>
+
+        <div id="model-custom-wrap" class="field" hidden>
+          <label class="field">
+            <span class="field__label">Custom model id</span>
+            <input
+              id="model-custom"
+              class="field__input"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field__label">Max batch size</span>
+          <input
+            id="batch-max"
+            class="field__input"
+            type="number"
+            name="batchMax"
+            min="1"
+            max="50"
+            step="1"
+            inputmode="numeric"
+            spellcheck="false"
+            aria-describedby="batch-max-hint"
+          />
+        </label>
+        <p id="batch-max-hint" class="field__hint">
+          Max distinct videos per LLM request (1–50). Lower if you hit rate limits; default 10.
+        </p>
+
+        <label class="field field--checkbox">
+          <input
+            id="verbose-logging"
+            type="checkbox"
+            name="verboseLogging"
+            class="field__checkbox"
+          />
+          <span class="field__label field__label--inline">Log classifications in console</span>
+        </label>
+        <p class="field__hint">
+          Open DevTools on youtube.com (F12) → Console. Each video logs
+          <code>method</code> (rule or later <code>llm</code>), <code>tier</code>, and rule
+          traces in <code>detail</code>.
+        </p>
+
+        <button type="submit" class="btn">Save</button>
+      </form>
+
+      <p id="status" class="status" aria-live="polite"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
