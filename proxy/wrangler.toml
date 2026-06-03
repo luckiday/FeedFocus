@@ -13,9 +13,9 @@ ARK_MODEL = "doubao-seed-2-0-mini-260428"
 ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 # Daily caps. 1 unit = 1 video classified.
 # Global is the hard budget ceiling that bounds your free-token spend.
-DEVICE_DAILY_LIMIT = "200"
-IP_DAILY_LIMIT = "400"
-GLOBAL_DAILY_LIMIT = "5000"
+DEVICE_DAILY_LIMIT = "1000"
+IP_DAILY_LIMIT = "2000"
+GLOBAL_DAILY_LIMIT = "20000"
 MAX_ITEMS = "20"
 
 # ARK_API_KEY is a SECRET — never put it here. Set it with:
