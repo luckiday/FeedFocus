@@ -60,7 +60,7 @@ YouTube home-feed video tile.
 > retains only anonymous daily request counts for abuse prevention. Your settings
 > and any API key are stored locally in your browser (chrome.storage.local) and
 > are never transmitted to us. We do not sell data or use it for advertising.
-> Contact: <your email>.
+> Contact: github.com/luckiday
 
 (Publish on GitHub Pages, a gist, Notion public page, etc. Chrome requires a
 reachable privacy-policy URL because the extension handles an API key + page data.)
