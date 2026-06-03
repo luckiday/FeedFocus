@@ -1,4 +1,5 @@
 export const MSG_CLASSIFY_BATCH = "CLASSIFY_BATCH" as const;
+export const MSG_TEST_KEY = "TEST_KEY" as const;
 
 /** Long-lived port for streaming classify deltas (content script ↔ background). */
 export const PORT_CLASSIFY_STREAM = "DOPAMINE_CLASSIFY_STREAM" as const;
@@ -50,3 +51,15 @@ export type ClassifyBatchMessage = {
   type: typeof MSG_CLASSIFY_BATCH;
   items: ClassifyBatchItem[];
 };
+
+/** Validate a user-typed key against `${baseUrl}/chat/completions` with `modelId`. */
+export type TestKeyMessage = {
+  type: typeof MSG_TEST_KEY;
+  baseUrl: string;
+  modelId: string;
+  key: string;
+};
+
+export type TestKeyResponse =
+  | { ok: true; modelId: string }
+  | { ok: false; error: string };

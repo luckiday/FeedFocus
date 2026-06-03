@@ -3,6 +3,7 @@
  */
 
 import type { ClassifyBatchItem } from "../shared/messages";
+import { normalizeClassifyBatchItem } from "../shared/normalize-llm-input";
 
 const CARD_SELECTORS = ["ytd-rich-item-renderer", "ytd-video-renderer"] as const;
 
@@ -104,7 +105,7 @@ export function stableItemKey(
   return `h${(h >>> 0).toString(16)}`;
 }
 
-/** Full video tile (thumbnail + title row): marker sits bottom-right of this box. */
+/** Full tile box (thumbnail + metadata); the marker sits at its bottom-right, off the image. */
 export function getTileMarkerHost(card: HTMLElement): HTMLElement {
   const inner = card.querySelector("#content");
   if (inner instanceof HTMLElement) {
@@ -115,7 +116,7 @@ export function getTileMarkerHost(card: HTMLElement): HTMLElement {
   return card;
 }
 
-/** Element that wraps the thumbnail only (used to detect a real video tile). */
+/** Element that wraps the thumbnail (real-tile detector). */
 export function getThumbnailHost(card: Element): HTMLElement | null {
   for (const sel of THUMBNAIL_HOST_SELECTORS) {
     const el = card.querySelector(sel);
@@ -264,5 +265,5 @@ export function buildClassifyBatchItem(
   if (meta.uploadedAgo) item.pub = meta.uploadedAgo;
   if (meta.handle) item.h = meta.handle;
   if (meta.shorts) item.short = true;
-  return item;
+  return normalizeClassifyBatchItem(item);
 }

@@ -15,7 +15,8 @@ import { EXTENSION_LOG_PREFIX, EXTENSION_SHORT_NAME } from "../shared/branding";
 import { tierCacheGet, tierCachePutMany } from "../shared/tier-cache";
 import { logClassification } from "./classification-log";
 import type { AttentionTier } from "./heuristics";
-import { HEURISTIC_TIER_KEY, MARKER_CLASS, MARKER_HEURISTIC_CLASS } from "./markers";
+import { HEURISTIC_TIER_KEY, MARKER_CLASS, paintMarker } from "./markers";
+import { normalizeClassifyBatchItem } from "../shared/normalize-llm-input";
 import { getChannelName, getTitle, getVideoId } from "./yt-dom";
 
 /**
@@ -118,7 +119,7 @@ function mergeBatchItem(
   if (next.pub || prev.pub) m.pub = next.pub || prev.pub;
   if (next.h || prev.h) m.h = next.h || prev.h;
   if (next.short || prev.short) m.short = true;
-  return m;
+  return normalizeClassifyBatchItem(m);
 }
 
 function tierLetterToTier(v: string): AttentionTier | null {
@@ -138,14 +139,7 @@ export function applyHeuristicFallbackFromPending(card: HTMLElement): void {
   const tier = readHeuristicTier(card);
   const dot = card.querySelector<HTMLElement>(`.${MARKER_CLASS}`);
   if (!dot) return;
-  dot.classList.remove(
-    `${MARKER_CLASS}--pending`,
-    `${MARKER_CLASS}--G`,
-    `${MARKER_CLASS}--Y`,
-    `${MARKER_CLASS}--R`,
-    MARKER_HEURISTIC_CLASS
-  );
-  dot.classList.add(MARKER_HEURISTIC_CLASS);
+  paintMarker(card, dot, { kind: "heuristic" });
   dot.title = tier
     ? `${EXTENSION_SHORT_NAME}: no model tier (gray). Rule hint: ${tier}.`
     : `${EXTENSION_SHORT_NAME}: no model tier (gray).`;
@@ -163,14 +157,7 @@ export function applyCachedLlmTierToCard(
   const dot = card.querySelector<HTMLElement>(`.${MARKER_CLASS}`);
   if (!dot) return;
 
-  dot.classList.remove(
-    `${MARKER_CLASS}--pending`,
-    `${MARKER_CLASS}--G`,
-    `${MARKER_CLASS}--Y`,
-    `${MARKER_CLASS}--R`,
-    MARKER_HEURISTIC_CLASS
-  );
-  dot.classList.add(`${MARKER_CLASS}--${tier}`);
+  paintMarker(card, dot, { kind: "tier", tier });
   dot.title = `${EXTENSION_SHORT_NAME}: cached LLM (${storedModelId}) · ${tier}`;
 
   const title = getTitle(card) ?? "";
@@ -199,14 +186,7 @@ export function applyLlmTierToCard(
   const dot = card.querySelector<HTMLElement>(`.${MARKER_CLASS}`);
   if (!dot) return;
 
-  dot.classList.remove(
-    `${MARKER_CLASS}--pending`,
-    `${MARKER_CLASS}--G`,
-    `${MARKER_CLASS}--Y`,
-    `${MARKER_CLASS}--R`,
-    MARKER_HEURISTIC_CLASS
-  );
-  dot.classList.add(`${MARKER_CLASS}--${tier}`);
+  paintMarker(card, dot, { kind: "tier", tier });
   dot.title = `${EXTENSION_SHORT_NAME}: LLM (${modelId}) · ${tier}`;
 
   const title = getTitle(card) ?? "";
@@ -297,9 +277,30 @@ async function flushQueue(): Promise<void> {
 
     if (!res.ok) {
       const errStr = String(res.error);
-      if (errStr.includes("http_401")) {
+      if (errStr.includes("global_cap")) {
         console.warn(
-          `${EXTENSION_LOG_PREFIX} LLM skipped (401 invalid/expired key). Confirm keys in .env (repo root) match the provider for your selected model, run npm run build, and reload the extension.`,
+          `${EXTENSION_LOG_PREFIX} Free tier is at today's global limit for everyone. Try later, or switch to your own API key in the popup for unlimited use.`,
+          res.error
+        );
+      } else if (errStr.includes("rate_limited")) {
+        console.warn(
+          `${EXTENSION_LOG_PREFIX} You hit today's free-tier limit. Switch to your own API key in the popup for higher limits.`,
+          res.error
+        );
+      } else if (errStr.includes("proxy_not_configured")) {
+        console.warn(
+          `${EXTENSION_LOG_PREFIX} Free mode isn't configured in this build. Set PROXY_BASE_URL (src/shared/config.ts) or switch to your own API key in the popup.`,
+          res.error
+        );
+      } else if (errStr.includes("no_api_key")) {
+        const provider = errStr.endsWith("ark") ? "Ark" : "DashScope";
+        console.warn(
+          `${EXTENSION_LOG_PREFIX} LLM skipped — no API key. Open the extension popup and paste your ${provider} API key for the selected model. Tiles fall back to gray rule hints until then.`,
+          res.error
+        );
+      } else if (errStr.includes("http_401")) {
+        console.warn(
+          `${EXTENSION_LOG_PREFIX} LLM skipped (401 invalid/expired key). Open the extension popup and confirm the API key matches the provider for your selected model.`,
           res.error
         );
       } else if (errStr.includes("http_403")) {

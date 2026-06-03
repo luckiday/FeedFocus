@@ -5,7 +5,8 @@
   "description": "Feed Focus for YouTube — Chrome MV3 extension",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "build:public": "PUBLIC_BUILD=1 node esbuild.config.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "zip": "npm run build && node scripts/zip.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && npm run build"

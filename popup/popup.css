@@ -24,6 +24,11 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute must win over our `display: flex` section/block rules. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -48,7 +53,11 @@ body {
 }
 
 .shell__header {
-  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .shell__title {
@@ -189,5 +198,226 @@ body {
   border: 1px solid var(--line);
   border-radius: 2px;
   background: var(--field-bg);
+}
+
+.field__hint a {
+  color: var(--fg);
+}
+
+.field__optional {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  opacity: 0.7;
+}
+
+/* --- Master enable switch --- */
+.switch {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.switch__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch__track {
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--line);
+  transition: background 0.15s ease;
+  vertical-align: middle;
+}
+
+.switch__thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 2px;
+  border-radius: 50%;
+  background: var(--field-bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.switch__input:checked + .switch__track {
+  background: #5f8f5f;
+}
+
+.switch__input:checked + .switch__track .switch__thumb {
+  transform: translateX(16px);
+}
+
+.switch__input:focus-visible + .switch__track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- Legend --- */
+.legend {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--field-bg);
+}
+
+.legend__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.legend__dot {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+}
+
+.legend__dot--G {
+  background: #7d8f7c;
+}
+.legend__dot--Y {
+  background: #b89a4e;
+}
+.legend__dot--R {
+  background: #8f4d45;
+}
+.legend__dot--gray {
+  background: #8a8a8a;
+}
+
+.legend__text {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.legend__text strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* --- Sections --- */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.section__title {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.field--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* --- Segmented control (marker style) --- */
+.segmented {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.segmented__opt {
+  flex: 1;
+  position: relative;
+  text-align: center;
+  cursor: pointer;
+}
+
+.segmented__opt input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.segmented__opt span {
+  display: block;
+  padding: 7px 4px;
+  font-size: 11px;
+  color: var(--muted);
+  border-left: 1px solid var(--line);
+}
+
+.segmented__opt:first-child span {
+  border-left: none;
+}
+
+.segmented__opt input:checked + span {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.segmented__opt input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* --- Provider blocks + OpenAI-compatible presets --- */
+.provider-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.presets .btn--ghost {
+  padding: 5px 10px;
+  font-size: 10px;
+}
+
+/* --- Ghost button (Test key) --- */
+.btn--ghost {
+  margin-top: 0;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--line);
+}
+
+.btn--ghost:hover {
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+.btn--ghost:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 

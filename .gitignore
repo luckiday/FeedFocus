@@ -2,3 +2,8 @@
 .env
 node_modules/
 .claude/
+*.zip
+# Cloudflare Wrangler local cache + local secrets
+.wrangler/
+.dev.vars
+.dev.vars.*

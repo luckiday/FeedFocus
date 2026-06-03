@@ -9,62 +9,232 @@
   <body>
     <main class="shell">
       <header class="shell__header">
-        <h1 class="shell__title">Feed Focus</h1>
-        <p class="shell__tagline">Attention cues · YouTube home feed</p>
+        <div class="shell__heading">
+          <h1 class="shell__title">Feed Focus</h1>
+          <p class="shell__tagline">Attention cues · YouTube home feed</p>
+        </div>
+        <label class="switch" title="Enable or disable markers">
+          <input id="enabled" type="checkbox" class="switch__input" />
+          <span class="switch__track"><span class="switch__thumb"></span></span>
+        </label>
       </header>
 
-      <form id="settings-form" class="form">
-        <label class="field">
-          <span class="field__label">Model</span>
-          <select id="model-id" class="field__input field__input--select" name="modelId"></select>
-        </label>
+      <ul class="legend" aria-label="What the marker colors mean">
+        <li class="legend__row">
+          <span class="legend__dot legend__dot--G">G</span>
+          <span class="legend__text"><strong>Green</strong> — restorative / genuinely deep</span>
+        </li>
+        <li class="legend__row">
+          <span class="legend__dot legend__dot--Y">Y</span>
+          <span class="legend__text"><strong>Yellow</strong> — standard, neutral</span>
+        </li>
+        <li class="legend__row">
+          <span class="legend__dot legend__dot--R">R</span>
+          <span class="legend__text"><strong>Red</strong> — attention-extractive</span>
+        </li>
+        <li class="legend__row">
+          <span class="legend__dot legend__dot--gray"></span>
+          <span class="legend__text"><strong>Gray</strong> — rules only / no key</span>
+        </li>
+      </ul>
 
-        <div id="model-custom-wrap" class="field" hidden>
+      <form id="settings-form" class="form">
+        <section class="section">
+          <h2 class="section__title">Access</h2>
+          <div class="segmented" role="radiogroup" aria-label="Access mode">
+            <label class="segmented__opt">
+              <input type="radio" name="keyMode" value="free" />
+              <span>Free (shared)</span>
+            </label>
+            <label class="segmented__opt">
+              <input type="radio" name="keyMode" value="own" />
+              <span>Your own key</span>
+            </label>
+          </div>
+          <p id="free-note" class="field__hint">
+            Free mode uses a shared, rate-limited service (Doubao via Volcengine) —
+            no key needed. For higher limits and Qwen models, switch to your own key.
+          </p>
+        </section>
+
+        <section id="section-keys" class="section">
+          <h2 class="section__title">Provider &amp; key</h2>
+
           <label class="field">
-            <span class="field__label">Custom model id</span>
+            <span class="field__label">Provider</span>
+            <select id="provider-select" class="field__input field__input--select">
+              <option value="dashscope">Aliyun Qwen (DashScope)</option>
+              <option value="ark">Volcengine Doubao (Ark)</option>
+              <option value="openai">Other — OpenAI-compatible</option>
+            </select>
+          </label>
+
+          <div id="block-dashscope" class="provider-block">
+            <label class="field">
+              <span class="field__label">DashScope API key</span>
+              <input
+                id="dashscope-key"
+                class="field__input"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="sk-…"
+              />
+            </label>
+            <p class="field__hint">
+              Get one at
+              <a href="https://bailian.console.aliyun.com/?apiKey=1" target="_blank" rel="noopener noreferrer">Aliyun Model Studio</a>.
+            </p>
+          </div>
+
+          <div id="block-ark" class="provider-block" hidden>
+            <label class="field">
+              <span class="field__label">Ark API key</span>
+              <input
+                id="ark-key"
+                class="field__input"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Volcengine Ark key"
+              />
+            </label>
+            <p class="field__hint">For Doubao / <code>ep-…</code> models.</p>
+          </div>
+
+          <div id="block-openai" class="provider-block" hidden>
+            <span class="field__label">Quick fill</span>
+            <div id="openai-presets" class="presets">
+              <button type="button" class="btn btn--ghost" data-base="https://api.openai.com/v1" data-model="gpt-4o-mini">OpenAI</button>
+              <button type="button" class="btn btn--ghost" data-base="https://api.deepseek.com" data-model="deepseek-chat">DeepSeek</button>
+              <button type="button" class="btn btn--ghost" data-base="https://openrouter.ai/api/v1" data-model="anthropic/claude-3.5-haiku">OpenRouter</button>
+              <button type="button" class="btn btn--ghost" data-base="https://generativelanguage.googleapis.com/v1beta/openai" data-model="gemini-2.0-flash">Gemini</button>
+            </div>
+            <label class="field">
+              <span class="field__label">Base URL</span>
+              <input
+                id="openai-base"
+                class="field__input"
+                type="url"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="https://api.openai.com/v1"
+              />
+            </label>
+            <label class="field">
+              <span class="field__label">API key</span>
+              <input
+                id="openai-key"
+                class="field__input"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="sk-…"
+              />
+            </label>
+            <p class="field__hint">
+              Any OpenAI-compatible <code>/chat/completions</code> endpoint. Enter the
+              Base URL (the part <em>before</em> <code>/chat/completions</code>) and a
+              matching model id below.
+            </p>
+          </div>
+
+          <div class="field--row">
+            <label class="field--checkbox">
+              <input id="show-keys" type="checkbox" class="field__checkbox" />
+              <span class="field__label field__label--inline">Show keys</span>
+            </label>
+            <button id="test-key" type="button" class="btn btn--ghost">Test key</button>
+          </div>
+          <p id="test-status" class="field__hint" aria-live="polite"></p>
+        </section>
+
+        <section id="section-model" class="section">
+          <h2 class="section__title">Model</h2>
+          <label class="field">
+            <span class="field__label">Model id</span>
             <input
-              id="model-custom"
+              id="model-id"
               class="field__input"
               type="text"
+              list="model-suggestions"
               autocomplete="off"
               spellcheck="false"
+              placeholder="e.g. qwen-turbo"
+            />
+            <datalist id="model-suggestions">
+              <option value="qwen-turbo"></option>
+              <option value="qwen3.6-plus"></option>
+              <option value="qwen3.5-flash"></option>
+              <option value="doubao-seed-2-0-mini-260428"></option>
+              <option value="gpt-4o-mini"></option>
+              <option value="deepseek-chat"></option>
+              <option value="anthropic/claude-3.5-haiku"></option>
+              <option value="gemini-2.0-flash"></option>
+            </datalist>
+          </label>
+          <p class="field__hint">Must match the selected provider.</p>
+        </section>
+
+        <section class="section">
+          <h2 class="section__title">Display</h2>
+          <span class="field__label">Marker style</span>
+          <div class="segmented" role="radiogroup" aria-label="Marker style">
+            <label class="segmented__opt">
+              <input type="radio" name="markerStyle" value="dot" />
+              <span>Corner dot</span>
+            </label>
+            <label class="segmented__opt">
+              <input type="radio" name="markerStyle" value="border" />
+              <span>Tile border</span>
+            </label>
+            <label class="segmented__opt">
+              <input type="radio" name="markerStyle" value="dim" />
+              <span>Dim red</span>
+            </label>
+          </div>
+
+          <label class="field--checkbox">
+            <input id="marker-labels" type="checkbox" class="field__checkbox" />
+            <span class="field__label field__label--inline">Show G/Y/R letter on markers (colorblind-safe)</span>
+          </label>
+        </section>
+
+        <section class="section">
+          <h2 class="section__title">Advanced</h2>
+          <label class="field">
+            <span class="field__label">Max batch size</span>
+            <input
+              id="batch-max"
+              class="field__input"
+              type="number"
+              name="batchMax"
+              min="1"
+              max="50"
+              step="1"
+              inputmode="numeric"
+              spellcheck="false"
+              aria-describedby="batch-max-hint"
             />
           </label>
-        </div>
+          <p id="batch-max-hint" class="field__hint">
+            Max distinct videos per LLM request (1–50). Lower if you hit rate limits; default 10.
+          </p>
 
-        <label class="field">
-          <span class="field__label">Max batch size</span>
-          <input
-            id="batch-max"
-            class="field__input"
-            type="number"
-            name="batchMax"
-            min="1"
-            max="50"
-            step="1"
-            inputmode="numeric"
-            spellcheck="false"
-            aria-describedby="batch-max-hint"
-          />
-        </label>
-        <p id="batch-max-hint" class="field__hint">
-          Max distinct videos per LLM request (1–50). Lower if you hit rate limits; default 10.
-        </p>
-
-        <label class="field field--checkbox">
-          <input
-            id="verbose-logging"
-            type="checkbox"
-            name="verboseLogging"
-            class="field__checkbox"
-          />
-          <span class="field__label field__label--inline">Log classifications in console</span>
-        </label>
-        <p class="field__hint">
-          Open DevTools on youtube.com (F12) → Console. Each video logs
-          <code>method</code> (rule or later <code>llm</code>), <code>tier</code>, and rule
-          traces in <code>detail</code>.
-        </p>
+          <label class="field--checkbox">
+            <input
+              id="verbose-logging"
+              type="checkbox"
+              name="verboseLogging"
+              class="field__checkbox"
+            />
+            <span class="field__label field__label--inline">Log classifications in console</span>
+          </label>
+          <p class="field__hint">
+            Open DevTools on youtube.com (F12) → Console to see each tile's
+            <code>method</code>, <code>tier</code>, and rule traces.
+          </p>
+        </section>
 
         <button type="submit" class="btn">Save</button>
       </form>

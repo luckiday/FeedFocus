@@ -1,17 +1,26 @@
 import {
   MSG_CLASSIFY_BATCH,
+  MSG_TEST_KEY,
   PORT_CLASSIFY_STREAM,
   type ClassifyBatchMessage,
   type ClassifyBatchResponse,
   type ClassifyStreamPortClientMsg,
   type ClassifyStreamPortServerMsg,
+  type TestKeyMessage,
+  type TestKeyResponse,
 } from "../shared/messages";
 import { DEFAULT_SETTINGS } from "../shared/settings";
-import { bootstrapSettingsFromBundledEnv } from "./env-bootstrap";
-import { classifyBatchArk, classifyBatchArkStream, loadSettings } from "./ark-classify";
+import { bootstrapSettings } from "./env-bootstrap";
+import {
+  classifyBatchArk,
+  classifyBatchArkStream,
+  loadSettings,
+  testApiKey,
+} from "./ark-classify";
+import { classifyBatchViaProxy } from "./proxy-classify";
 
-chrome.runtime.onInstalled.addListener((details) => {
-  void bootstrapSettingsFromBundledEnv(details.reason);
+chrome.runtime.onInstalled.addListener(() => {
+  void bootstrapSettings();
 });
 
 chrome.runtime.onConnect.addListener((port) => {
@@ -44,6 +53,13 @@ chrome.runtime.onConnect.addListener((port) => {
           return;
         }
         const settings = await loadSettings();
+
+        if (settings.keyMode === "free") {
+          const res = await classifyBatchViaProxy(items);
+          safePost({ type: "final", response: res } satisfies ClassifyStreamPortServerMsg);
+          return;
+        }
+
         const modelId = settings.modelId?.trim() || DEFAULT_SETTINGS.modelId;
 
         const res = await classifyBatchArkStream(settings, items, (partial) => {
@@ -67,6 +83,20 @@ chrome.runtime.onConnect.addListener((port) => {
 
 chrome.runtime.onMessage.addListener(
   (
+    message: TestKeyMessage,
+    _sender,
+    sendResponse: (r: TestKeyResponse) => void
+  ) => {
+    if (!message || message.type !== MSG_TEST_KEY) return false;
+    void (async () => {
+      sendResponse(await testApiKey(message.baseUrl, message.modelId, message.key));
+    })();
+    return true;
+  }
+);
+
+chrome.runtime.onMessage.addListener(
+  (
     message: ClassifyBatchMessage,
     _sender,
     sendResponse: (r: ClassifyBatchResponse) => void
@@ -82,7 +112,10 @@ chrome.runtime.onMessage.addListener(
 
     void (async () => {
       const settings = await loadSettings();
-      const res = await classifyBatchArk(settings, items);
+      const res =
+        settings.keyMode === "free"
+          ? await classifyBatchViaProxy(items)
+          : await classifyBatchArk(settings, items);
       sendResponse(res);
     })();
 

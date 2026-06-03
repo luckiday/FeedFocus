@@ -1,7 +1,7 @@
 import {
   DEFAULT_SETTINGS,
   hydrateSettings,
-  resolveProviderForModel,
+  resolveProvider,
   SETTINGS_STORAGE_KEY,
   trimApiBaseUrl,
   type FeedFocusSettings,
@@ -11,6 +11,7 @@ import type {
   ClassifyBatchResponse,
   TierLetter,
 } from "../shared/messages";
+import { normalizeClassifyBatchItems } from "../shared/normalize-llm-input";
 
 const SYSTEM_PROMPT = `You are a fast, objective cognitive-load classifier for YouTube videos. Your goal is to estimate *stimulation / pacing cost* and *attention quality* of a video based on its tile metadata, not its surface topic.
 
@@ -279,17 +280,22 @@ export async function classifyBatchArkStream(
   onPartial: (results: { id: string; v: TierLetter }[]) => void
 ): Promise<ClassifyBatchResponse> {
   const model = settings.modelId?.trim() || DEFAULT_SETTINGS.modelId;
-  const { key, baseUrl: resolvedBase } = resolveProviderForModel(model);
+  const { provider, key, baseUrl: resolvedBase } = resolveProvider(settings);
+  if (!key) return { ok: false, error: `no_api_key:${provider}` };
+  if (!resolvedBase) return { ok: false, error: "no_base_url" };
   const base = trimApiBaseUrl(resolvedBase);
   const url = `${base}/chat/completions`;
 
-  const expectedIds = new Set(items.map((x) => x.id));
-  const userPayload = `INPUT:\n${JSON.stringify(items)}\n\nReturn ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructions. No other text.`;
+  const normalizedItems = normalizeClassifyBatchItems(items);
+  const expectedIds = new Set(normalizedItems.map((x) => x.id));
+  const userPayload = `INPUT:\n${JSON.stringify(normalizedItems)}\n\nReturn ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructions. No other text.`;
 
   const body = {
     model,
     temperature: 0.2,
     stream: true,
+    // Doubao reasons by default (~13× tokens); the prompt carries the nuance.
+    ...(provider === "ark" ? { thinking: { type: "disabled" } } : {}),
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userPayload },
@@ -362,16 +368,20 @@ export async function classifyBatchArk(
   items: ClassifyBatchItem[]
 ): Promise<ClassifyBatchResponse> {
   const model = settings.modelId?.trim() || DEFAULT_SETTINGS.modelId;
-  const { key, baseUrl: resolvedBase } = resolveProviderForModel(model);
+  const { provider, key, baseUrl: resolvedBase } = resolveProvider(settings);
+  if (!key) return { ok: false, error: `no_api_key:${provider}` };
+  if (!resolvedBase) return { ok: false, error: "no_base_url" };
   const base = trimApiBaseUrl(resolvedBase);
   const url = `${base}/chat/completions`;
 
-  const expectedIds = new Set(items.map((x) => x.id));
-  const userPayload = `INPUT:\n${JSON.stringify(items)}\n\nReturn ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructions. No other text.`;
+  const normalizedItems = normalizeClassifyBatchItems(items);
+  const expectedIds = new Set(normalizedItems.map((x) => x.id));
+  const userPayload = `INPUT:\n${JSON.stringify(normalizedItems)}\n\nReturn ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructions. No other text.`;
 
   const body = {
     model,
     temperature: 0.2,
+    ...(provider === "ark" ? { thinking: { type: "disabled" } } : {}),
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userPayload },
@@ -407,6 +417,46 @@ export async function classifyBatchArk(
   }
 
   return classifyFromAssistantText(text, expectedIds, model);
+}
+
+/**
+ * Validate a user-typed key by issuing a minimal completion against
+ * `${baseUrl}/chat/completions` with `modelId`. Returns ok on HTTP 200,
+ * otherwise a short error (e.g. `http_401:…`) the popup can show.
+ */
+export async function testApiKey(
+  baseUrl: string,
+  modelId: string,
+  key: string
+): Promise<{ ok: true; modelId: string } | { ok: false; error: string }> {
+  const model = modelId.trim() || DEFAULT_SETTINGS.modelId;
+  const trimmedKey = key.trim();
+  if (!trimmedKey) return { ok: false, error: "no_api_key" };
+  const trimmedBase = trimApiBaseUrl(baseUrl.trim());
+  if (!trimmedBase) return { ok: false, error: "no_base_url" };
+  const url = `${trimmedBase}/chat/completions`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${trimmedKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "ping" }],
+      }),
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "fetch_failed" };
+  }
+
+  if (res.ok) return { ok: true, modelId: model };
+  const t = await res.text().catch(() => "");
+  return { ok: false, error: `http_${res.status}:${t.slice(0, 200)}` };
 }
 
 export async function loadSettings(): Promise<FeedFocusSettings> {

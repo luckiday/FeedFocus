@@ -64,23 +64,56 @@
     if (!Number.isFinite(n)) return DEFAULT_BATCH_MAX;
     return Math.min(BATCH_MAX_MAX, Math.max(BATCH_MAX_MIN, Math.floor(n)));
   }
+  function coerceProvider(value) {
+    return value === "ark" || value === "openai" ? value : "dashscope";
+  }
+  function defaultProviderForModel(modelId) {
+    return modelId.startsWith("doubao") || modelId.startsWith("ep-") ? "ark" : "dashscope";
+  }
+  function coerceMarkerStyle(value) {
+    return value === "border" || value === "dim" ? value : "dot";
+  }
+  function coerceKeyMode(value) {
+    return value === "own" ? "own" : "free";
+  }
   var DEFAULT_SETTINGS = {
+    keyMode: "free",
+    provider: "dashscope",
     modelId: "qwen-turbo",
+    dashscopeApiKey: "",
+    arkApiKey: "",
+    openaiApiKey: "",
+    openaiBaseUrl: "",
+    enabled: true,
+    markerStyle: "dot",
+    markerLabels: false,
     batchMax: DEFAULT_BATCH_MAX,
     verboseLogging: false
   };
   var MODEL_ID_MIGRATIONS = {
     "qwen-plus": "qwen3.6-plus",
-    "qwen-flash": "qwen3.5-flash"
+    "qwen-flash": "qwen3.5-flash",
+    "doubao-seed-2-0-mini-260215": "doubao-seed-2-0-mini-260428"
   };
   function migrateModelId(id) {
     return MODEL_ID_MIGRATIONS[id] ?? id;
   }
   function hydrateSettings(raw) {
+    const modelId = migrateModelId(
+      typeof raw?.modelId === "string" ? raw.modelId : DEFAULT_SETTINGS.modelId
+    );
     return {
-      modelId: migrateModelId(
-        typeof raw?.modelId === "string" ? raw.modelId : DEFAULT_SETTINGS.modelId
-      ),
+      keyMode: coerceKeyMode(raw?.keyMode),
+      // Pre-provider installs: derive from the old model-prefix scheme.
+      provider: raw?.provider === void 0 ? defaultProviderForModel(modelId) : coerceProvider(raw.provider),
+      modelId,
+      dashscopeApiKey: typeof raw?.dashscopeApiKey === "string" ? raw.dashscopeApiKey : DEFAULT_SETTINGS.dashscopeApiKey,
+      arkApiKey: typeof raw?.arkApiKey === "string" ? raw.arkApiKey : DEFAULT_SETTINGS.arkApiKey,
+      openaiApiKey: typeof raw?.openaiApiKey === "string" ? raw.openaiApiKey : DEFAULT_SETTINGS.openaiApiKey,
+      openaiBaseUrl: typeof raw?.openaiBaseUrl === "string" ? raw.openaiBaseUrl : DEFAULT_SETTINGS.openaiBaseUrl,
+      enabled: typeof raw?.enabled === "boolean" ? raw.enabled : DEFAULT_SETTINGS.enabled,
+      markerStyle: coerceMarkerStyle(raw?.markerStyle),
+      markerLabels: typeof raw?.markerLabels === "boolean" ? raw.markerLabels : DEFAULT_SETTINGS.markerLabels,
       batchMax: clampBatchMax(raw?.batchMax ?? DEFAULT_SETTINGS.batchMax),
       verboseLogging: typeof raw?.verboseLogging === "boolean" ? raw.verboseLogging : DEFAULT_SETTINGS.verboseLogging
     };
@@ -184,6 +217,72 @@
   var CHECKED_ATTR = "data-ff-focus-checked";
   var HEURISTIC_TIER_KEY = "ffFocusHeuristicTier";
   var MARKER_HEURISTIC_CLASS = `${MARKER_CLASS}--heuristic`;
+  var markerPrefs = {
+    style: "dot",
+    labels: true
+  };
+  function paintMarker(card, dot, state) {
+    dot.classList.remove(
+      `${MARKER_CLASS}--pending`,
+      `${MARKER_CLASS}--G`,
+      `${MARKER_CLASS}--Y`,
+      `${MARKER_CLASS}--R`,
+      MARKER_HEURISTIC_CLASS
+    );
+    if (state.kind === "tier") {
+      dot.classList.add(`${MARKER_CLASS}--${state.tier}`);
+      dot.textContent = markerPrefs.labels ? state.tier : "";
+      card.dataset.ffStyle = markerPrefs.style;
+      card.dataset.ffTier = state.tier;
+    } else {
+      dot.textContent = "";
+      dot.classList.add(
+        state.kind === "heuristic" ? MARKER_HEURISTIC_CLASS : `${MARKER_CLASS}--pending`
+      );
+      delete card.dataset.ffTier;
+      delete card.dataset.ffStyle;
+    }
+  }
+
+  // src/shared/normalize-llm-input.ts
+  var INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF\u2060\u180E\u00AD\u061C\u200E\u200F]/g;
+  var BIDI_EMBEDS = /[\u202A-\u202E]/g;
+  var DURATION_LABEL = /^\d{1,2}:\d{2}(:\d{2})?$/;
+  function normalizeLlmText(raw) {
+    let s = raw.normalize("NFKC");
+    s = s.replace(INVISIBLE_CHARS, "").replace(BIDI_EMBEDS, "");
+    s = s.replace(/\s+/g, " ").trim();
+    return s;
+  }
+  function normalizeVideoItemId(raw) {
+    const t = normalizeLlmText(raw).replace(/\s+/g, "");
+    return t;
+  }
+  function normalizeClassifyBatchItem(item) {
+    const id = normalizeVideoItemId(item.id);
+    const t = normalizeLlmText(item.t);
+    const c = normalizeLlmText(item.c);
+    const out = { id, t, c };
+    if (item.d) {
+      const d = normalizeLlmText(item.d);
+      if (DURATION_LABEL.test(d)) out.d = d;
+    }
+    if (item.vc) {
+      const vc = normalizeLlmText(item.vc);
+      if (vc) out.vc = vc;
+    }
+    if (item.pub) {
+      const pub = normalizeLlmText(item.pub);
+      if (pub) out.pub = pub;
+    }
+    if (item.h) {
+      const h = normalizeLlmText(item.h);
+      const bare = h.replace(/^@+/, "").trim();
+      if (bare) out.h = `@${bare}`;
+    }
+    if (item.short === true) out.short = true;
+    return out;
+  }
 
   // src/content/yt-dom.ts
   var CARD_SELECTORS = ["ytd-rich-item-renderer", "ytd-video-renderer"];
@@ -383,7 +482,7 @@
     if (meta.uploadedAgo) item.pub = meta.uploadedAgo;
     if (meta.handle) item.h = meta.handle;
     if (meta.shorts) item.short = true;
-    return item;
+    return normalizeClassifyBatchItem(item);
   }
 
   // src/content/llm-batch.ts
@@ -464,7 +563,7 @@
     if (next.pub || prev.pub) m.pub = next.pub || prev.pub;
     if (next.h || prev.h) m.h = next.h || prev.h;
     if (next.short || prev.short) m.short = true;
-    return m;
+    return normalizeClassifyBatchItem(m);
   }
   function tierLetterToTier(v) {
     const u = v.toUpperCase();
@@ -480,14 +579,7 @@
     const tier = readHeuristicTier(card);
     const dot = card.querySelector(`.${MARKER_CLASS}`);
     if (!dot) return;
-    dot.classList.remove(
-      `${MARKER_CLASS}--pending`,
-      `${MARKER_CLASS}--G`,
-      `${MARKER_CLASS}--Y`,
-      `${MARKER_CLASS}--R`,
-      MARKER_HEURISTIC_CLASS
-    );
-    dot.classList.add(MARKER_HEURISTIC_CLASS);
+    paintMarker(card, dot, { kind: "heuristic" });
     dot.title = tier ? `${EXTENSION_SHORT_NAME}: no model tier (gray). Rule hint: ${tier}.` : `${EXTENSION_SHORT_NAME}: no model tier (gray).`;
   }
   function applyCachedLlmTierToCard(card, tierLetter, storedModelId) {
@@ -495,14 +587,7 @@
     if (!tier) return;
     const dot = card.querySelector(`.${MARKER_CLASS}`);
     if (!dot) return;
-    dot.classList.remove(
-      `${MARKER_CLASS}--pending`,
-      `${MARKER_CLASS}--G`,
-      `${MARKER_CLASS}--Y`,
-      `${MARKER_CLASS}--R`,
-      MARKER_HEURISTIC_CLASS
-    );
-    dot.classList.add(`${MARKER_CLASS}--${tier}`);
+    paintMarker(card, dot, { kind: "tier", tier });
     dot.title = `${EXTENSION_SHORT_NAME}: cached LLM (${storedModelId}) \xB7 ${tier}`;
     const title = getTitle(card) ?? "";
     const channel = getChannelName(card) ?? "";
@@ -522,14 +607,7 @@
     if (!tier) return;
     const dot = card.querySelector(`.${MARKER_CLASS}`);
     if (!dot) return;
-    dot.classList.remove(
-      `${MARKER_CLASS}--pending`,
-      `${MARKER_CLASS}--G`,
-      `${MARKER_CLASS}--Y`,
-      `${MARKER_CLASS}--R`,
-      MARKER_HEURISTIC_CLASS
-    );
-    dot.classList.add(`${MARKER_CLASS}--${tier}`);
+    paintMarker(card, dot, { kind: "tier", tier });
     dot.title = `${EXTENSION_SHORT_NAME}: LLM (${modelId}) \xB7 ${tier}`;
     const title = getTitle(card) ?? "";
     const channel = getChannelName(card) ?? "";
@@ -600,9 +678,30 @@
       });
       if (!res.ok) {
         const errStr = String(res.error);
-        if (errStr.includes("http_401")) {
+        if (errStr.includes("global_cap")) {
           console.warn(
-            `${EXTENSION_LOG_PREFIX} LLM skipped (401 invalid/expired key). Confirm keys in .env (repo root) match the provider for your selected model, run npm run build, and reload the extension.`,
+            `${EXTENSION_LOG_PREFIX} Free tier is at today's global limit for everyone. Try later, or switch to your own API key in the popup for unlimited use.`,
+            res.error
+          );
+        } else if (errStr.includes("rate_limited")) {
+          console.warn(
+            `${EXTENSION_LOG_PREFIX} You hit today's free-tier limit. Switch to your own API key in the popup for higher limits.`,
+            res.error
+          );
+        } else if (errStr.includes("proxy_not_configured")) {
+          console.warn(
+            `${EXTENSION_LOG_PREFIX} Free mode isn't configured in this build. Set PROXY_BASE_URL (src/shared/config.ts) or switch to your own API key in the popup.`,
+            res.error
+          );
+        } else if (errStr.includes("no_api_key")) {
+          const provider = errStr.endsWith("ark") ? "Ark" : "DashScope";
+          console.warn(
+            `${EXTENSION_LOG_PREFIX} LLM skipped \u2014 no API key. Open the extension popup and paste your ${provider} API key for the selected model. Tiles fall back to gray rule hints until then.`,
+            res.error
+          );
+        } else if (errStr.includes("http_401")) {
+          console.warn(
+            `${EXTENSION_LOG_PREFIX} LLM skipped (401 invalid/expired key). Open the extension popup and confirm the API key matches the provider for your selected model.`,
             res.error
           );
         } else if (errStr.includes("http_403")) {
@@ -660,6 +759,13 @@
   }
 
   // src/content/youtube-home.ts
+  var extensionEnabled = true;
+  async function syncPrefs() {
+    const s = await loadSettingsSnapshot();
+    extensionEnabled = s.enabled;
+    markerPrefs.style = s.markerStyle;
+    markerPrefs.labels = s.markerLabels;
+  }
   function removeMarkersFromCard(card) {
     const nodes = card.querySelectorAll(`.${MARKER_CLASS}`);
     for (let i = 0; i < nodes.length; i++) {
@@ -667,12 +773,12 @@
     }
   }
   async function processCard(card) {
+    if (!extensionEnabled) return;
     if (card.getAttribute(CHECKED_ATTR) === "true") return;
     const thumb = getThumbnailHost(card);
     const title = getTitle(card) ?? "";
     const channel = getChannelName(card) ?? "";
     if (!thumb || !title && !channel) return;
-    const markerHost = getTileMarkerHost(card);
     card.setAttribute(CHECKED_ATTR, "true");
     removeMarkersFromCard(card);
     const rule = classifyHeuristicDetailed(title, channel);
@@ -691,9 +797,10 @@
     });
     const dot = document.createElement("span");
     dot.setAttribute("aria-hidden", "true");
-    dot.className = `${MARKER_CLASS} ${MARKER_CLASS}--pending`;
+    dot.className = MARKER_CLASS;
+    paintMarker(card, dot, { kind: "pending" });
     dot.title = `${EXTENSION_SHORT_NAME}: waiting for model\u2026`;
-    markerHost.appendChild(dot);
+    getTileMarkerHost(card).appendChild(dot);
     void enqueueCardForLlm(card, buildClassifyBatchItem(card, itemId, title, channel));
   }
   var scheduled = null;
@@ -712,14 +819,19 @@
       }
     }, 120);
   }
-  function resetCards() {
+  function clearAllMarkers() {
     resetLlmQueue();
     for (const card of queryVideoCards()) {
       card.removeAttribute(CHECKED_ATTR);
       delete card.dataset.ffVid;
       delete card.dataset[HEURISTIC_TIER_KEY];
+      delete card.dataset.ffTier;
+      delete card.dataset.ffStyle;
       removeMarkersFromCard(card);
     }
+  }
+  function resetCards() {
+    clearAllMarkers();
     scheduleScan();
   }
   function attachObserver() {
@@ -730,8 +842,17 @@
     });
   }
   attachVerboseLoggingSync();
-  scheduleScan();
+  void syncPrefs().then(() => {
+    if (extensionEnabled) scheduleScan();
+  });
   attachObserver();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes[SETTINGS_STORAGE_KEY]) return;
+    void syncPrefs().then(() => {
+      if (extensionEnabled) resetCards();
+      else clearAllMarkers();
+    });
+  });
   window.addEventListener("yt-page-data-updated", scheduleScan);
   document.addEventListener("yt-page-data-updated", scheduleScan);
   window.addEventListener("yt-navigate-finish", resetCards);

@@ -2,6 +2,7 @@
 (() => {
   // src/shared/messages.ts
   var MSG_CLASSIFY_BATCH = "CLASSIFY_BATCH";
+  var MSG_TEST_KEY = "TEST_KEY";
   var PORT_CLASSIFY_STREAM = "DOPAMINE_CLASSIFY_STREAM";
 
   // src/shared/settings.ts
@@ -17,91 +18,133 @@
   function trimApiBaseUrl(url) {
     return url.replace(/\/+$/, "");
   }
-  var ARK_KEY = "";
   var ARK_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
-  var DASHSCOPE_KEY = "";
   var DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
-  function resolveProviderForModel(modelId) {
-    if (modelId.startsWith("doubao") || modelId.startsWith("ep-")) {
-      return { key: ARK_KEY, baseUrl: ARK_BASE_URL };
+  function coerceProvider(value) {
+    return value === "ark" || value === "openai" ? value : "dashscope";
+  }
+  function defaultProviderForModel(modelId) {
+    return modelId.startsWith("doubao") || modelId.startsWith("ep-") ? "ark" : "dashscope";
+  }
+  function resolveProvider(settings) {
+    switch (settings.provider) {
+      case "ark":
+        return { provider: "ark", key: settings.arkApiKey.trim(), baseUrl: ARK_BASE_URL };
+      case "openai":
+        return {
+          provider: "openai",
+          key: settings.openaiApiKey.trim(),
+          baseUrl: trimApiBaseUrl(settings.openaiBaseUrl.trim())
+        };
+      case "dashscope":
+      default:
+        return {
+          provider: "dashscope",
+          key: settings.dashscopeApiKey.trim(),
+          baseUrl: DASHSCOPE_BASE_URL
+        };
     }
-    return { key: DASHSCOPE_KEY, baseUrl: DASHSCOPE_BASE_URL };
+  }
+  function coerceMarkerStyle(value) {
+    return value === "border" || value === "dim" ? value : "dot";
+  }
+  function coerceKeyMode(value) {
+    return value === "own" ? "own" : "free";
   }
   var DEFAULT_SETTINGS = {
+    keyMode: "free",
+    provider: "dashscope",
     modelId: "qwen-turbo",
+    dashscopeApiKey: "",
+    arkApiKey: "",
+    openaiApiKey: "",
+    openaiBaseUrl: "",
+    enabled: true,
+    markerStyle: "dot",
+    markerLabels: false,
     batchMax: DEFAULT_BATCH_MAX,
     verboseLogging: false
   };
   var MODEL_ID_MIGRATIONS = {
     "qwen-plus": "qwen3.6-plus",
-    "qwen-flash": "qwen3.5-flash"
+    "qwen-flash": "qwen3.5-flash",
+    "doubao-seed-2-0-mini-260215": "doubao-seed-2-0-mini-260428"
   };
   function migrateModelId(id) {
     return MODEL_ID_MIGRATIONS[id] ?? id;
   }
   function hydrateSettings(raw) {
+    const modelId = migrateModelId(
+      typeof raw?.modelId === "string" ? raw.modelId : DEFAULT_SETTINGS.modelId
+    );
     return {
-      modelId: migrateModelId(
-        typeof raw?.modelId === "string" ? raw.modelId : DEFAULT_SETTINGS.modelId
-      ),
+      keyMode: coerceKeyMode(raw?.keyMode),
+      // Pre-provider installs: derive from the old model-prefix scheme.
+      provider: raw?.provider === void 0 ? defaultProviderForModel(modelId) : coerceProvider(raw.provider),
+      modelId,
+      dashscopeApiKey: typeof raw?.dashscopeApiKey === "string" ? raw.dashscopeApiKey : DEFAULT_SETTINGS.dashscopeApiKey,
+      arkApiKey: typeof raw?.arkApiKey === "string" ? raw.arkApiKey : DEFAULT_SETTINGS.arkApiKey,
+      openaiApiKey: typeof raw?.openaiApiKey === "string" ? raw.openaiApiKey : DEFAULT_SETTINGS.openaiApiKey,
+      openaiBaseUrl: typeof raw?.openaiBaseUrl === "string" ? raw.openaiBaseUrl : DEFAULT_SETTINGS.openaiBaseUrl,
+      enabled: typeof raw?.enabled === "boolean" ? raw.enabled : DEFAULT_SETTINGS.enabled,
+      markerStyle: coerceMarkerStyle(raw?.markerStyle),
+      markerLabels: typeof raw?.markerLabels === "boolean" ? raw.markerLabels : DEFAULT_SETTINGS.markerLabels,
       batchMax: clampBatchMax(raw?.batchMax ?? DEFAULT_SETTINGS.batchMax),
       verboseLogging: typeof raw?.verboseLogging === "boolean" ? raw.verboseLogging : DEFAULT_SETTINGS.verboseLogging
     };
   }
 
   // src/background/env-bootstrap.ts
-  function parseEnvText(text) {
-    const out = {};
-    for (const line of text.split(/\r?\n/)) {
-      const t = line.trim();
-      if (!t || t.startsWith("#")) continue;
-      const eq = t.indexOf("=");
-      if (eq <= 0) continue;
-      const k = t.slice(0, eq).trim();
-      let v = t.slice(eq + 1).trim();
-      if (v.startsWith('"') && v.endsWith('"') || v.startsWith("'") && v.endsWith("'")) {
-        v = v.slice(1, -1);
-      }
-      if (k) out[k] = v;
-    }
-    return out;
-  }
-  function envToSettingsPatch(env) {
-    const patch = {};
-    const model = env.MODEL_ID || env.MODEL || env.DASHSCOPE_MODEL;
-    if (model?.trim()) patch.modelId = model.trim();
-    if (env.BATCH_MAX?.trim()) {
-      patch.batchMax = clampBatchMax(Number(env.BATCH_MAX));
-    }
-    if (env.VERBOSE_LOGGING === "1" || /^true$/i.test(env.VERBOSE_LOGGING ?? "")) {
-      patch.verboseLogging = true;
-    }
-    return patch;
-  }
-  async function bootstrapSettingsFromBundledEnv(reason) {
+  async function bootstrapSettings() {
     const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
     const cur = raw[SETTINGS_STORAGE_KEY];
+    if (cur === void 0) return;
     const merged = hydrateSettings(cur);
-    const needsMigration = typeof cur?.modelId === "string" && cur.modelId !== merged.modelId;
-    let patch = {};
-    try {
-      const url = chrome.runtime.getURL(".env");
-      const res = await fetch(url);
-      if (res.ok) {
-        patch = envToSettingsPatch(parseEnvText(await res.text()));
-      }
-    } catch {
-    }
-    const hasPatch = patch.modelId !== void 0 || patch.batchMax !== void 0 || patch.verboseLogging !== void 0;
-    if (!needsMigration && !hasPatch) return;
-    const overwrite = reason === chrome.runtime.OnInstalledReason.INSTALL;
-    if (patch.modelId !== void 0 && (overwrite || !merged.modelId))
-      merged.modelId = patch.modelId;
-    if (patch.batchMax !== void 0 && (overwrite || merged.batchMax === DEFAULT_SETTINGS.batchMax))
-      merged.batchMax = patch.batchMax;
-    if (patch.verboseLogging !== void 0 && (overwrite || !merged.verboseLogging))
-      merged.verboseLogging = patch.verboseLogging;
+    if (cur.modelId === merged.modelId) return;
     await chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: merged });
+  }
+
+  // src/shared/normalize-llm-input.ts
+  var INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF\u2060\u180E\u00AD\u061C\u200E\u200F]/g;
+  var BIDI_EMBEDS = /[\u202A-\u202E]/g;
+  var DURATION_LABEL = /^\d{1,2}:\d{2}(:\d{2})?$/;
+  function normalizeLlmText(raw) {
+    let s = raw.normalize("NFKC");
+    s = s.replace(INVISIBLE_CHARS, "").replace(BIDI_EMBEDS, "");
+    s = s.replace(/\s+/g, " ").trim();
+    return s;
+  }
+  function normalizeVideoItemId(raw) {
+    const t = normalizeLlmText(raw).replace(/\s+/g, "");
+    return t;
+  }
+  function normalizeClassifyBatchItem(item) {
+    const id = normalizeVideoItemId(item.id);
+    const t = normalizeLlmText(item.t);
+    const c = normalizeLlmText(item.c);
+    const out = { id, t, c };
+    if (item.d) {
+      const d = normalizeLlmText(item.d);
+      if (DURATION_LABEL.test(d)) out.d = d;
+    }
+    if (item.vc) {
+      const vc = normalizeLlmText(item.vc);
+      if (vc) out.vc = vc;
+    }
+    if (item.pub) {
+      const pub = normalizeLlmText(item.pub);
+      if (pub) out.pub = pub;
+    }
+    if (item.h) {
+      const h = normalizeLlmText(item.h);
+      const bare = h.replace(/^@+/, "").trim();
+      if (bare) out.h = `@${bare}`;
+    }
+    if (item.short === true) out.short = true;
+    return out;
+  }
+  function normalizeClassifyBatchItems(items) {
+    return items.map(normalizeClassifyBatchItem);
   }
 
   // src/background/ark-classify.ts
@@ -342,18 +385,23 @@ If a video is genuinely ambiguous, default to Y. Reserve R for clear extraction 
   }
   async function classifyBatchArkStream(settings, items, onPartial) {
     const model = settings.modelId?.trim() || DEFAULT_SETTINGS.modelId;
-    const { key, baseUrl: resolvedBase } = resolveProviderForModel(model);
+    const { provider, key, baseUrl: resolvedBase } = resolveProvider(settings);
+    if (!key) return { ok: false, error: `no_api_key:${provider}` };
+    if (!resolvedBase) return { ok: false, error: "no_base_url" };
     const base = trimApiBaseUrl(resolvedBase);
     const url = `${base}/chat/completions`;
-    const expectedIds = new Set(items.map((x) => x.id));
+    const normalizedItems = normalizeClassifyBatchItems(items);
+    const expectedIds = new Set(normalizedItems.map((x) => x.id));
     const userPayload = `INPUT:
-${JSON.stringify(items)}
+${JSON.stringify(normalizedItems)}
 
 Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructions. No other text.`;
     const body = {
       model,
       temperature: 0.2,
       stream: true,
+      // Doubao reasons by default (~13× tokens); the prompt carries the nuance.
+      ...provider === "ark" ? { thinking: { type: "disabled" } } : {},
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPayload }
@@ -412,17 +460,21 @@ Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructio
   }
   async function classifyBatchArk(settings, items) {
     const model = settings.modelId?.trim() || DEFAULT_SETTINGS.modelId;
-    const { key, baseUrl: resolvedBase } = resolveProviderForModel(model);
+    const { provider, key, baseUrl: resolvedBase } = resolveProvider(settings);
+    if (!key) return { ok: false, error: `no_api_key:${provider}` };
+    if (!resolvedBase) return { ok: false, error: "no_base_url" };
     const base = trimApiBaseUrl(resolvedBase);
     const url = `${base}/chat/completions`;
-    const expectedIds = new Set(items.map((x) => x.id));
+    const normalizedItems = normalizeClassifyBatchItems(items);
+    const expectedIds = new Set(normalizedItems.map((x) => x.id));
     const userPayload = `INPUT:
-${JSON.stringify(items)}
+${JSON.stringify(normalizedItems)}
 
 Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructions. No other text.`;
     const body = {
       model,
       temperature: 0.2,
+      ...provider === "ark" ? { thinking: { type: "disabled" } } : {},
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPayload }
@@ -453,14 +505,113 @@ Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructio
     }
     return classifyFromAssistantText(text, expectedIds, model);
   }
+  async function testApiKey(baseUrl, modelId, key) {
+    const model = modelId.trim() || DEFAULT_SETTINGS.modelId;
+    const trimmedKey = key.trim();
+    if (!trimmedKey) return { ok: false, error: "no_api_key" };
+    const trimmedBase = trimApiBaseUrl(baseUrl.trim());
+    if (!trimmedBase) return { ok: false, error: "no_base_url" };
+    const url = `${trimmedBase}/chat/completions`;
+    let res;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${trimmedKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1,
+          messages: [{ role: "user", content: "ping" }]
+        })
+      });
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "fetch_failed" };
+    }
+    if (res.ok) return { ok: true, modelId: model };
+    const t = await res.text().catch(() => "");
+    return { ok: false, error: `http_${res.status}:${t.slice(0, 200)}` };
+  }
   async function loadSettings() {
     const raw = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
     return hydrateSettings(raw[SETTINGS_STORAGE_KEY]);
   }
 
+  // src/shared/config.ts
+  var PROXY_BASE_URL = "https://feed-focus-proxy.guoyunqi.workers.dev";
+  function isProxyConfigured() {
+    return !PROXY_BASE_URL.includes("YOUR-SUBDOMAIN");
+  }
+
+  // src/shared/device-id.ts
+  var DEVICE_ID_KEY = "feedFocusDeviceId";
+  async function getDeviceId() {
+    const raw = await chrome.storage.local.get(DEVICE_ID_KEY);
+    const existing = raw[DEVICE_ID_KEY];
+    if (typeof existing === "string" && existing) return existing;
+    const id = crypto.randomUUID();
+    await chrome.storage.local.set({ [DEVICE_ID_KEY]: id });
+    return id;
+  }
+
+  // src/background/proxy-classify.ts
+  function parseTier2(v) {
+    if (v === "G" || v === "Y" || v === "R") return v;
+    return null;
+  }
+  async function classifyBatchViaProxy(items) {
+    if (!isProxyConfigured()) {
+      return { ok: false, error: "proxy_not_configured" };
+    }
+    const normalized = normalizeClassifyBatchItems(items);
+    const expectedIds = new Set(normalized.map((x) => x.id));
+    let res;
+    try {
+      const deviceId = await getDeviceId();
+      res = await fetch(`${PROXY_BASE_URL.replace(/\/+$/, "")}/classify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Device-Id": deviceId
+        },
+        body: JSON.stringify({ items: normalized })
+      });
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "fetch_failed" };
+    }
+    if (!res.ok) {
+      let err = `http_${res.status}`;
+      try {
+        const body = await res.json();
+        if (typeof body?.error === "string") err = body.error;
+      } catch {
+      }
+      return { ok: false, error: err };
+    }
+    const data = await res.json().catch(() => null);
+    if (!data?.ok || !Array.isArray(data.results)) {
+      return { ok: false, error: "proxy_bad_response" };
+    }
+    const results = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const row of data.results) {
+      const id = row?.id;
+      const v = parseTier2(row?.v);
+      if (typeof id !== "string" || !expectedIds.has(id) || seen.has(id) || !v) continue;
+      seen.add(id);
+      results.push({ id, v });
+    }
+    return {
+      ok: true,
+      results,
+      modelId: typeof data.modelId === "string" ? data.modelId : "free"
+    };
+  }
+
   // src/background/background.ts
-  chrome.runtime.onInstalled.addListener((details) => {
-    void bootstrapSettingsFromBundledEnv(details.reason);
+  chrome.runtime.onInstalled.addListener(() => {
+    void bootstrapSettings();
   });
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== PORT_CLASSIFY_STREAM) return;
@@ -489,6 +640,11 @@ Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructio
             return;
           }
           const settings = await loadSettings();
+          if (settings.keyMode === "free") {
+            const res2 = await classifyBatchViaProxy(items);
+            safePost({ type: "final", response: res2 });
+            return;
+          }
           const modelId = settings.modelId?.trim() || DEFAULT_SETTINGS.modelId;
           const res = await classifyBatchArkStream(settings, items, (partial) => {
             safePost({
@@ -510,6 +666,15 @@ Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructio
   });
   chrome.runtime.onMessage.addListener(
     (message, _sender, sendResponse) => {
+      if (!message || message.type !== MSG_TEST_KEY) return false;
+      void (async () => {
+        sendResponse(await testApiKey(message.baseUrl, message.modelId, message.key));
+      })();
+      return true;
+    }
+  );
+  chrome.runtime.onMessage.addListener(
+    (message, _sender, sendResponse) => {
       if (!message || message.type !== MSG_CLASSIFY_BATCH) {
         return false;
       }
@@ -520,7 +685,7 @@ Return ONLY a valid JSON array in the OUTPUT FORMAT specified in your instructio
       }
       void (async () => {
         const settings = await loadSettings();
-        const res = await classifyBatchArk(settings, items);
+        const res = settings.keyMode === "free" ? await classifyBatchViaProxy(items) : await classifyBatchArk(settings, items);
         sendResponse(res);
       })();
       return true;

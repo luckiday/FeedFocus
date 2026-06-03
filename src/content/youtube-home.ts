@@ -1,14 +1,16 @@
 import { classifyHeuristicDetailed, type AttentionTier } from "./heuristics";
 import { EXTENSION_LOG_PREFIX, EXTENSION_SHORT_NAME } from "../shared/branding";
+import { SETTINGS_STORAGE_KEY } from "../shared/settings";
 import {
   attachVerboseLoggingSync,
   logClassification,
 } from "./classification-log";
 import {
   enqueueCardForLlm,
+  loadSettingsSnapshot,
   resetLlmQueue,
 } from "./llm-batch";
-import { CHECKED_ATTR, HEURISTIC_TIER_KEY, MARKER_CLASS, MARKER_HEURISTIC_CLASS } from "./markers";
+import { CHECKED_ATTR, HEURISTIC_TIER_KEY, MARKER_CLASS, markerPrefs, paintMarker } from "./markers";
 import {
   buildClassifyBatchItem,
   getChannelName,
@@ -20,6 +22,16 @@ import {
   stableItemKey,
 } from "./yt-dom";
 
+let extensionEnabled = true;
+
+/** Mirror settings into the synchronous marker prefs + enabled flag. */
+async function syncPrefs(): Promise<void> {
+  const s = await loadSettingsSnapshot();
+  extensionEnabled = s.enabled;
+  markerPrefs.style = s.markerStyle;
+  markerPrefs.labels = s.markerLabels;
+}
+
 function removeMarkersFromCard(card: Element): void {
   const nodes = card.querySelectorAll(`.${MARKER_CLASS}`);
   for (let i = 0; i < nodes.length; i++) {
@@ -28,6 +40,7 @@ function removeMarkersFromCard(card: Element): void {
 }
 
 async function processCard(card: HTMLElement): Promise<void> {
+  if (!extensionEnabled) return;
   if (card.getAttribute(CHECKED_ATTR) === "true") return;
 
   const thumb = getThumbnailHost(card);
@@ -36,7 +49,6 @@ async function processCard(card: HTMLElement): Promise<void> {
 
   if (!thumb || (!title && !channel)) return;
 
-  const markerHost = getTileMarkerHost(card);
   card.setAttribute(CHECKED_ATTR, "true");
 
   removeMarkersFromCard(card);
@@ -59,10 +71,11 @@ async function processCard(card: HTMLElement): Promise<void> {
 
   const dot = document.createElement("span");
   dot.setAttribute("aria-hidden", "true");
-  dot.className = `${MARKER_CLASS} ${MARKER_CLASS}--pending`;
+  dot.className = MARKER_CLASS;
+  paintMarker(card, dot, { kind: "pending" });
   dot.title = `${EXTENSION_SHORT_NAME}: waiting for model…`;
 
-  markerHost.appendChild(dot);
+  getTileMarkerHost(card).appendChild(dot);
 
   void enqueueCardForLlm(card, buildClassifyBatchItem(card, itemId, title, channel));
 }
@@ -85,14 +98,20 @@ function scheduleScan(): void {
   }, 120);
 }
 
-function resetCards(): void {
+function clearAllMarkers(): void {
   resetLlmQueue();
   for (const card of queryVideoCards()) {
     card.removeAttribute(CHECKED_ATTR);
     delete card.dataset.ffVid;
     delete card.dataset[HEURISTIC_TIER_KEY];
+    delete card.dataset.ffTier;
+    delete card.dataset.ffStyle;
     removeMarkersFromCard(card);
   }
+}
+
+function resetCards(): void {
+  clearAllMarkers();
   scheduleScan();
 }
 
@@ -106,8 +125,19 @@ function attachObserver(): void {
 
 attachVerboseLoggingSync();
 
-scheduleScan();
+void syncPrefs().then(() => {
+  if (extensionEnabled) scheduleScan();
+});
 attachObserver();
+
+// Re-render live when the popup changes settings (style/labels/enable).
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes[SETTINGS_STORAGE_KEY]) return;
+  void syncPrefs().then(() => {
+    if (extensionEnabled) resetCards();
+    else clearAllMarkers();
+  });
+});
 
 window.addEventListener("yt-page-data-updated", scheduleScan);
 document.addEventListener("yt-page-data-updated", scheduleScan);
