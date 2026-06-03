@@ -1,79 +1,112 @@
 # Feed Focus for YouTube
 
-Unpacked Chrome extension (MV3) that adds **small green / yellow / red markers** on **youtube.com** home‑feed tiles. Colors reflect an optional **LLM classifier** (**bring your own API key**, entered in the popup) plus **offline gray hints** from lightweight rules.
+A Manifest V3 Chrome extension that adds a **small green / yellow / red dot** to each
+**youtube.com** home‑feed tile, flagging how *restorative* vs. *attention‑extractive*
+a video is likely to be. Colors come from an **LLM classifier** plus **offline gray
+hints** from lightweight rules.
 
-**Naming:** “Feed Focus” reads clearly in the store and avoids implying a medical or neuroscience measurement—it’s a **personal attention cue**, not clinical advice.
+- **Green** — restorative / genuinely deep · **Yellow** — neutral · **Red** — high‑stimulation / clickbait
+- Two ways to power the classifier: a rate‑limited **Free mode** (no key) or **bring your own key** (Aliyun Qwen, Volcengine Doubao, or any OpenAI‑compatible provider).
+- **No API key is ever bundled into the build.**
 
-## Disclaimer
+**Naming:** “Feed Focus” reads clearly in the store and avoids implying a medical or
+neuroscience measurement — it’s a **personal attention cue**, not clinical advice.
 
-This tool does **not** diagnose or treat anything. Tier labels are **heuristic / model opinions** about pacing and clickbait patterns. Your viewing choices are yours alone.
-
-## Privacy & data
-
-- **youtube.com only:** Content script runs on YouTube; markers are drawn locally.
-- **storage:** Settings (model id, **your API key**, batch size, verbose logging) live in `chrome.storage.local`. The key never leaves your browser except in requests to the provider you chose.
-- **network:** When you enter a key in the popup, the background worker calls **Aliyun DashScope** (and/or **Volcengine Ark** for Doubao models) OpenAI‑compatible `chat/completions` endpoints with **batched video titles/channels** (see source). No keys are bundled into the shipped extension; no separate analytics server is included.
-
-Prepare matching **single‑purpose** and **permission justification** text for the Chrome Web Store listing from the above.
-
-## Build
+## Quickstart
 
 ```bash
 npm install
-npm run build
+npm run build          # bundles src/ → popup/ background/ content/ (no secrets)
 ```
 
-Load **`chrome://extensions`** → **Load unpacked** → select **this directory** (where `manifest.json` lives).
+Then load it: **`chrome://extensions`** → enable **Developer mode** → **Load unpacked**
+→ select this directory (where `manifest.json` lives). Open the toolbar popup to pick a
+mode (see below) and start browsing youtube.com.
 
-- **`npm run build`** — bundles `src/` into `popup/`, `background/`, `content/`. **No secrets are embedded.**
+## Disclaimer
 
-### Access modes
+This tool does **not** diagnose or treat anything. Tier labels are **heuristic / model
+opinions** about pacing and clickbait patterns. Your viewing choices are yours alone.
 
-The popup offers two modes (no secret is ever baked into the build):
+## Access modes
 
-- **Free (shared)** — routes batches through a rate-limited Cloudflare Worker that holds *your* Volcengine Ark key server-side (Doubao model). New users get value with **no key**. Requires deploying the proxy in [`proxy/`](proxy/README.md) and setting `PROXY_BASE_URL` in `src/shared/config.ts`. This is the hard-budget-capped free tier for early users.
-- **Your own key (BYOK)** — the user pastes their own key in the popup; the background worker calls the provider directly. Higher limits and Qwen models.
+The popup’s **Access** toggle chooses where classification runs (no secret is baked into
+the build either way):
 
-To configure BYOK in the popup:
+- **Free (shared)** — routes batches through a rate‑limited **Cloudflare Worker**
+  ([`proxy/`](proxy/README.md)) that holds *your* Volcengine Ark key server‑side and caps
+  usage per device / IP / globally. New users get value with **no key**. Requires
+  deploying the proxy and setting `PROXY_BASE_URL` in `src/shared/config.ts`.
+- **Your own key (BYOK)** — the user pastes their own key; the background worker calls the
+  provider directly.
+
+### Configure BYOK
 
 1. Switch **Access** to *Your own key*.
 2. Choose a **Provider**:
    - **Aliyun Qwen (DashScope)** — paste your `sk-…` key ([get one](https://bailian.console.aliyun.com/?apiKey=1)).
    - **Volcengine Doubao (Ark)** — paste your Ark key.
-   - **Other — OpenAI-compatible** — works with any provider exposing a standard `/chat/completions` endpoint. Quick-fill buttons for **OpenAI / DeepSeek / OpenRouter / Google Gemini**, or type any **Base URL** (e.g. Groq, Moonshot/Kimi, Zhipu GLM, Anthropic's OpenAI-compat endpoint, local Ollama).
-3. Enter the matching **Model id**.
-4. Hit **Test key**, then **Save**.
+   - **Other — OpenAI‑compatible** — any provider exposing a standard `/chat/completions`
+     endpoint. Quick‑fill buttons for **OpenAI / DeepSeek / OpenRouter / Google Gemini**,
+     or type any **Base URL** (e.g. Groq, Moonshot/Kimi, Zhipu GLM, Anthropic’s
+     OpenAI‑compat endpoint, local Ollama).
+3. Enter the matching **Model id**, hit **Test key**, then **Save**.
 
 > The Base URL is the part *before* `/chat/completions` (e.g. `https://api.openai.com/v1`).
-> For a custom provider, Chrome prompts once to allow access to that host (granted on Test/Save via `optional_host_permissions`).
+> For a custom provider Chrome prompts once to allow that host (granted on Test/Save via
+> `optional_host_permissions`).
 
-Keys are stored in `chrome.storage.local` and read at request time. With neither mode available, tiles show gray rule-based hints only.
+Keys are stored in `chrome.storage.local` and read at request time. With neither mode
+available, tiles show gray rule‑based hints only.
 
 ## User‑visible behavior
 
-Markers sit at the **bottom‑right of each tile, below the thumbnail** (off the picture, so they don't compete with the video for attention):
+Markers sit at the **bottom‑right of each tile, below the thumbnail** (off the picture, so
+they don’t compete with the video for attention):
 
-1. **Hollow gray ring** — Waiting on the model.
-2. **Gray dot** — Rules ran; no reliable LLM tier (or no API key).
-3. **Solid green / yellow / red dot** — From the model (or cached output). Color is the signal; the G/Y/R **letter is optional** (off by default, toggle in the popup for colorblind‑safe reading).
+1. **Hollow gray ring** — waiting on the model.
+2. **Gray dot** — rules ran; no reliable LLM tier (or no key).
+3. **Solid green / yellow / red dot** — from the model (or cached output). Color is the
+   signal; the **G/Y/R letter is optional** (off by default, toggle in the popup for
+   colorblind‑safe reading).
 
-Open the toolbar popup to configure:
+The popup also offers a master **on/off** switch, a **color legend**, **marker style**
+(*corner dot* / *tile border* / *dim red*), **max batch size**, and optional **console
+logging**. Changing any setting re‑renders the open YouTube tab instantly (reusing cached
+tiers — no extra API calls).
 
-- **On/off switch** (header) — master toggle; off removes all markers.
-- **Color legend** — what G / Y / R / gray mean.
-- **API keys** with a **Test key** button that validates the key live against the selected model's provider.
-- **Marker style** — *Corner dot* (subtle), *Tile border* (colored outline), or *Dim red* (fades R tiles, reveal on hover).
-- **G/Y/R letters** toggle (colorblind‑safe), **model preset**, **max batch size**, and optional **console logging**.
+## Privacy & data
 
-Changing settings re‑renders the open YouTube tab instantly (reusing cached tiers, no extra API calls).
+- **youtube.com only:** the content script reads visible tile metadata (title, channel,
+  duration) and draws markers locally.
+- **storage:** settings and any API key live in `chrome.storage.local`; the key never
+  leaves your browser except in requests to the provider you chose.
+- **network:** titles/channels are batched to the selected provider (BYOK) or to the Free
+  proxy, which forwards them to Volcengine Ark and keeps only anonymous daily counts for
+  rate limiting. No analytics server.
 
-## Chrome Web Store zip
+Draft Web Store **single‑purpose**, **permission justification**, and **privacy** copy is
+in [`store-listing.md`](store-listing.md).
 
-Zip **only** what ships:
+## Scripts
 
-- `manifest.json`, `background/`, `content/`, `popup/`
+| Command | What it does |
+|---|---|
+| `npm run build` | Bundle `src/` → `popup/ background/ content/`. No secrets embedded. |
+| `npm run watch` | Rebuild on change. |
+| `npm run typecheck` | `tsc --noEmit`. |
+| `npm run icons` | Regenerate `icons/icon{16,32,48,128}.png` — from `icons/icon.png` if present (via `sips`), else on‑brand placeholders. |
+| `npm run zip` | Build, then package **only** the shipped files into `feed-focus-for-youtube-v<version>.zip`. |
 
-Exclude `src/`, `node_modules/`, `.env`, `.git/`, and dev configs unless Google requests source. **Never** put an API key in the uploaded zip — keys are user-supplied via the popup.
+## Chrome Web Store
+
+`npm run zip` produces an upload‑ready archive containing exactly `manifest.json`,
+`background/`, `content/`, `popup/`, and `icons/` — and nothing else (no `src/`, `proxy/`,
+`.env`, `node_modules/`, `.git/`). **Never** put an API key in the uploaded zip; keys are
+user‑supplied via the popup.
+
+Upload at <https://chrome.google.com/webstore/devconsole> and fill the listing from
+[`store-listing.md`](store-listing.md).
 
 ## Layout
 
@@ -81,11 +114,14 @@ Exclude `src/`, `node_modules/`, `.env`, `.git/`, and dev configs unless Google 
 ./
 ├── manifest.json
 ├── esbuild.config.mjs      # bundles src/ — no secrets injected
-├── popup/                   # built UI
-├── background/
-├── content/
-├── src/                     # TypeScript sources
-└── proxy/                   # Cloudflare Worker for Free mode (deployed separately)
+├── popup/                  # built UI (html/css + bundled js)
+├── background/             # built service worker
+├── content/               # built content script + css
+├── icons/                 # icon16/32/48/128 (+ optional icon.png master)
+├── src/                    # TypeScript sources
+├── scripts/                # make-icons.mjs, zip.mjs
+├── proxy/                  # Cloudflare Worker for Free mode (deployed separately)
+└── store-listing.md        # Web Store copy + permission/privacy drafts
 ```
 
-> Don't ship `proxy/` inside the Chrome zip — it's a separate Cloudflare deploy.
+> `proxy/` is a separate Cloudflare deploy — it is **not** shipped inside the Chrome zip.
