@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Feed Focus for YouTube",
   "version": "1.0.0",
-  "description": "Attention cues on YouTube home: green/yellow/red tile markers (bring your own LLM API key) plus offline gray hints—not medical advice.",
+  "description": "Attention cues on YouTube home: green/yellow/red tile markers (free or your LLM key) plus offline hints—not medical advice.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.youtube.com/*",
