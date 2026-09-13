@@ -1,127 +1,136 @@
-# Feed Focus for YouTube
+<p align="center">
+  <img src="icons/icon128.png" width="96" alt="Feed Focus for YouTube logo" />
+</p>
 
-A Manifest V3 Chrome extension that adds a **small green / yellow / red dot** to each
-**youtube.com** home‑feed tile, flagging how *restorative* vs. *attention‑extractive*
-a video is likely to be. Colors come from an **LLM classifier** plus **offline gray
-hints** from lightweight rules.
+<h1 align="center">Feed Focus for YouTube 👋</h1>
 
-- **Green** — restorative / genuinely deep · **Yellow** — neutral · **Red** — high‑stimulation / clickbait
-- Two ways to power the classifier: a rate‑limited **Free mode** (no key) or **bring your own key** (Aliyun Qwen, Volcengine Doubao, or any OpenAI‑compatible provider).
-- **No API key is ever bundled into the build.**
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/feed-focus-for-youtube/pmhljfmfkgdgaicpgacdaddglnlidabo">
+    <img alt="Chrome Web Store version" src="https://img.shields.io/chrome-web-store/v/pmhljfmfkgdgaicpgacdaddglnlidabo?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=4285F4" />
+  </a>
+  <a href="https://chromewebstore.google.com/detail/feed-focus-for-youtube/pmhljfmfkgdgaicpgacdaddglnlidabo">
+    <img alt="Chrome Web Store users" src="https://img.shields.io/chrome-web-store/users/pmhljfmfkgdgaicpgacdaddglnlidabo?color=34A853" />
+  </a>
+  <img alt="Manifest V3" src="https://img.shields.io/badge/manifest-v3-blue" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" />
+  <a href="PRIVACY.md">
+    <img alt="Privacy" src="https://img.shields.io/badge/privacy-no%20analytics-brightgreen" />
+  </a>
+</p>
 
-**Naming:** “Feed Focus” reads clearly in the store and avoids implying a medical or
-neuroscience measurement — it’s a **personal attention cue**, not clinical advice.
+> A Chrome extension that puts a small 🟢 / 🟡 / 🔴 dot on every YouTube feed tile, showing whether a video looks **restorative** or **attention‑extractive** *before* you click.
 
-## Quickstart
+### 🏠 [Install from the Chrome Web Store](https://chromewebstore.google.com/detail/feed-focus-for-youtube/pmhljfmfkgdgaicpgacdaddglnlidabo)
 
-```bash
+---
+
+## ✨ Features
+
+- 🟢 **Green**: restorative or genuinely deep (lectures, tutorials, slow vlogs, long calm interviews)
+- 🟡 **Yellow**: neutral, standard entertainment (reviews, playthroughs, casual vlogs)
+- 🔴 **Red**: high stimulation or clickbait (outrage hooks, hype, drama, most Shorts)
+- ⚪ **Gray**: offline rule‑based hint when no model result is available
+- 🆓 **Free mode** works with **no API key**, through a rate‑limited shared proxy
+- 🔑 **Bring your own key**: Aliyun Qwen, Volcengine Doubao, or any OpenAI‑compatible API (OpenAI, DeepSeek, OpenRouter, Gemini, Groq, Ollama, …)
+- 🎨 Marker styles: *corner dot*, *tile border*, or *dim red tiles*, plus optional G/Y/R letters for colorblind readers
+- ⚡ Batched, streaming classification with a local cache, so tiles you've already seen cost no extra API calls
+- 🔒 No bundled keys, no analytics, and it only runs on youtube.com
+
+The classifier judges **format, not topic**. *"How Bridges Actually Work"* from Practical Engineering gets green, while *"This Bridge Collapse Will SHOCK You 😱"* gets red.
+
+> **Disclaimer:** Feed Focus is a personal attention cue. It does not diagnose or treat anything, and tiers are heuristic or model opinions.
+
+## 🚀 Usage
+
+1. Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/feed-focus-for-youtube/pmhljfmfkgdgaicpgacdaddglnlidabo).
+2. Open **youtube.com** and markers appear under each tile's thumbnail:
+   - hollow gray ring: waiting for the model
+   - solid gray dot: rules only, no model tier
+   - solid green / yellow / red: model result
+3. Click the toolbar icon to switch it on or off, change marker style, or pick an **Access** mode.
+
+### Access modes
+
+| Mode | Key needed | How it works |
+|---|---|---|
+| **Free (shared)** | No | Batches go to a rate‑limited Cloudflare Worker ([`proxy/`](proxy/README.md)), which calls Volcengine Ark. Daily caps apply. |
+| **Your own key** | Yes | The extension calls your chosen provider directly. The key stays in `chrome.storage.local`. |
+
+**Setting up your own key:** set *Access* to **Your own key**, pick a **Provider**, paste the key, enter a **Model id**, then click **Test key** and **Save**.
+For *Other (OpenAI‑compatible)*, the **Base URL** is the part before `/chat/completions` (e.g. `https://api.openai.com/v1`). Chrome asks once for permission to reach that host.
+
+## 🛠️ Development
+
+**Prerequisites:** Node.js 18+ and Chrome
+
+```sh
+git clone https://github.com/luckiday/FeedFocus.git
+cd FeedFocus
 npm install
-npm run build          # bundles src/ → popup/ background/ content/ (no secrets)
+npm run build
 ```
 
-Then load it: **`chrome://extensions`** → enable **Developer mode** → **Load unpacked**
-→ select this directory (where `manifest.json` lives). Open the toolbar popup to pick a
-mode (see below) and start browsing youtube.com.
-
-## Disclaimer
-
-This tool does **not** diagnose or treat anything. Tier labels are **heuristic / model
-opinions** about pacing and clickbait patterns. Your viewing choices are yours alone.
-
-## Access modes
-
-The popup’s **Access** toggle chooses where classification runs (no secret is baked into
-the build either way):
-
-- **Free (shared)** — routes batches through a rate‑limited **Cloudflare Worker**
-  ([`proxy/`](proxy/README.md)) that holds *your* Volcengine Ark key server‑side and caps
-  usage per device / IP / globally. New users get value with **no key**. Requires
-  deploying the proxy and setting `PROXY_BASE_URL` in `src/shared/config.ts`.
-- **Your own key (BYOK)** — the user pastes their own key; the background worker calls the
-  provider directly.
-
-### Configure BYOK
-
-1. Switch **Access** to *Your own key*.
-2. Choose a **Provider**:
-   - **Aliyun Qwen (DashScope)** — paste your `sk-…` key ([get one](https://bailian.console.aliyun.com/?apiKey=1)).
-   - **Volcengine Doubao (Ark)** — paste your Ark key.
-   - **Other — OpenAI‑compatible** — any provider exposing a standard `/chat/completions`
-     endpoint. Quick‑fill buttons for **OpenAI / DeepSeek / OpenRouter / Google Gemini**,
-     or type any **Base URL** (e.g. Groq, Moonshot/Kimi, Zhipu GLM, Anthropic’s
-     OpenAI‑compat endpoint, local Ollama).
-3. Enter the matching **Model id**, hit **Test key**, then **Save**.
-
-> The Base URL is the part *before* `/chat/completions` (e.g. `https://api.openai.com/v1`).
-> For a custom provider Chrome prompts once to allow that host (granted on Test/Save via
-> `optional_host_permissions`).
-
-Keys are stored in `chrome.storage.local` and read at request time. With neither mode
-available, tiles show gray rule‑based hints only.
-
-## User‑visible behavior
-
-Markers sit at the **bottom‑right of each tile, below the thumbnail** (off the picture, so
-they don’t compete with the video for attention):
-
-1. **Hollow gray ring** — waiting on the model.
-2. **Gray dot** — rules ran; no reliable LLM tier (or no key).
-3. **Solid green / yellow / red dot** — from the model (or cached output). Color is the
-   signal; the **G/Y/R letter is optional** (off by default, toggle in the popup for
-   colorblind‑safe reading).
-
-The popup also offers a master **on/off** switch, a **color legend**, **marker style**
-(*corner dot* / *tile border* / *dim red*), **max batch size**, and optional **console
-logging**. Changing any setting re‑renders the open YouTube tab instantly (reusing cached
-tiers — no extra API calls).
-
-## Privacy & data
-
-- **youtube.com only:** the content script reads visible tile metadata (title, channel,
-  duration) and draws markers locally.
-- **storage:** settings and any API key live in `chrome.storage.local`; the key never
-  leaves your browser except in requests to the provider you chose.
-- **network:** titles/channels are batched to the selected provider (BYOK) or to the Free
-  proxy, which forwards them to Volcengine Ark and keeps only anonymous daily counts for
-  rate limiting. No analytics server.
-
-Draft Web Store **single‑purpose**, **permission justification**, and **privacy** copy is
-in [`store-listing.md`](store-listing.md).
-
-## Scripts
+Load it in Chrome: open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and select the repo root (the folder with `manifest.json`).
 
 | Command | What it does |
 |---|---|
-| `npm run build` | Bundle `src/` → `popup/ background/ content/`. No secrets embedded. |
-| `npm run watch` | Rebuild on change. |
-| `npm run typecheck` | `tsc --noEmit`. |
-| `npm run icons` | Regenerate `icons/icon{16,32,48,128}.png` — from `icons/icon.png` if present (via `sips`), else on‑brand placeholders. |
-| `npm run zip` | Build, then package **only** the shipped files into `feed-focus-for-youtube-v<version>.zip`. |
+| `npm run build` | Bundle `src/` into `popup/`, `background/`, and `content/` |
+| `npm run watch` | Rebuild on change |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Typecheck and build |
+| `npm run icons` | Regenerate `icons/icon{16,32,48,128}.png` |
+| `npm run zip` | Build, then package only the shipped files for the Web Store |
 
-## Chrome Web Store
-
-`npm run zip` produces an upload‑ready archive containing exactly `manifest.json`,
-`background/`, `content/`, `popup/`, and `icons/` — and nothing else (no `src/`, `proxy/`,
-`.env`, `node_modules/`, `.git/`). **Never** put an API key in the uploaded zip; keys are
-user‑supplied via the popup.
-
-Upload at <https://chrome.google.com/webstore/devconsole> and fill the listing from
-[`store-listing.md`](store-listing.md).
-
-## Layout
+### How it works
 
 ```text
-./
-├── manifest.json
-├── esbuild.config.mjs      # bundles src/ — no secrets injected
-├── popup/                  # built UI (html/css + bundled js)
-├── background/             # built service worker
-├── content/               # built content script + css
-├── icons/                 # icon16/32/48/128 (+ optional icon.png master)
-├── src/                    # TypeScript sources
-├── scripts/                # make-icons.mjs, zip.mjs
-├── proxy/                  # Cloudflare Worker for Free mode (deployed separately)
-└── store-listing.md        # Web Store copy + permission/privacy drafts
+YouTube tab (content script)          Background service worker            LLM
+┌───────────────────────────┐  port   ┌──────────────────────────┐
+│ scan tiles → rule hint     │ ──────► │ Free → proxy/ (Worker)   │ ──► Volcengine Ark
+│ cache hit? paint : enqueue │ ◄────── │ Own key → provider API   │ ──► Qwen / Doubao / OpenAI‑compat
+│ batch & stream → paint dot │ partial └──────────────────────────┘
+└───────────────────────────┘
 ```
 
-> `proxy/` is a separate Cloudflare deploy — it is **not** shipped inside the Chrome zip.
+### Project layout
+
+```text
+├── manifest.json
+├── src/
+│   ├── content/      # tile scanning, YouTube DOM selectors, batching queue, markers
+│   ├── background/   # provider + proxy clients, streaming parser, system prompt
+│   ├── popup/        # settings UI
+│   └── shared/       # settings, message types, tier cache, config
+├── popup/ background/ content/   # built output loaded by Chrome
+├── proxy/            # Cloudflare Worker for Free mode (deployed separately)
+├── scripts/          # icon + zip helpers
+├── PRIVACY.md
+└── store-listing.md
+```
+
+### Self‑hosting Free mode
+
+Deploy your own Worker by following [`proxy/README.md`](proxy/README.md), set `PROXY_BASE_URL` in [`src/shared/config.ts`](src/shared/config.ts), and rebuild.
+
+## 🔒 Privacy
+
+- Reads only visible tile metadata on youtube.com: title, channel, duration, views, and upload time.
+- Sends that metadata only to the provider you choose, or to the Free proxy, which keeps anonymous daily counts for rate limiting.
+- Your API key never leaves your browser except in requests to your chosen provider.
+
+Full policy: [PRIVACY.md](PRIVACY.md)
+
+## 👤 Author
+
+**Yunqi Guo**
+
+- GitHub: [@luckiday](https://github.com/luckiday)
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!
+Feel free to check the [issues page](https://github.com/luckiday/FeedFocus/issues).
+
+## ⭐️ Show your support
+
+If this helps you take back your feed, give the repo a ⭐️ or leave a review on the [Chrome Web Store](https://chromewebstore.google.com/detail/feed-focus-for-youtube/pmhljfmfkgdgaicpgacdaddglnlidabo)!
