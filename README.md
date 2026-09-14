@@ -122,7 +122,7 @@ Full policy: [PRIVACY.md](PRIVACY.md)
 
 ## 👤 Author
 
-**Yunqi Guo**
+**luckiday**
 
 - GitHub: [@luckiday](https://github.com/luckiday)
 
