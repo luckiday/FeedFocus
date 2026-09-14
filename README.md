@@ -16,6 +16,9 @@
   <a href="PRIVACY.md">
     <img alt="Privacy" src="https://img.shields.io/badge/privacy-no%20analytics-brightgreen" />
   </a>
+  <a href="LICENSE">
+    <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" />
+  </a>
 </p>
 
 > A Chrome extension that puts a small 🟢 / 🟡 / 🔴 dot on every YouTube feed tile, showing whether a video looks **restorative** or **attention‑extractive** *before* you click.
@@ -122,7 +125,7 @@ Full policy: [PRIVACY.md](PRIVACY.md)
 
 ## 👤 Author
 
-**Yunqi Guo**
+**luckiday**
 
 - GitHub: [@luckiday](https://github.com/luckiday)
 
@@ -134,3 +137,8 @@ Feel free to check the [issues page](https://github.com/luckiday/FeedFocus/issue
 ## ⭐️ Show your support
 
 If this helps you take back your feed, give the repo a ⭐️ or leave a review on the [Chrome Web Store](https://chromewebstore.google.com/detail/feed-focus-for-youtube/pmhljfmfkgdgaicpgacdaddglnlidabo)!
+
+## 📝 License
+
+Copyright © 2026 [luckiday](https://github.com/luckiday).<br />
+This project is [MIT](LICENSE) licensed.

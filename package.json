@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "Feed Focus for YouTube — Chrome MV3 extension",
+  "license": "MIT",
   "scripts": {
     "build": "node esbuild.config.mjs",
     "icons": "node scripts/make-icons.mjs",
